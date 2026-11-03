@@ -126,3 +126,53 @@ test('files browse + hours manual entries', async (t) => {
   assert.ok(summary.data.spentHours >= 2.5);
   assert.equal(summary.data.capHours, 10);
 });
+
+test('audience and title preserve literal $ (e.g. $200)', async (t) => {
+  const ctx = await listen(app);
+  t.after(() => ctx.close());
+
+  const created = await req(ctx.url, 'POST', '/api/boards', {
+    title: 'Budget build under $200',
+    audience: {
+      persona: 'Maker',
+      who: 'Maker',
+      alreadyKnow: 'Soldering',
+      promise: 'Useful local LLM under $200',
+    },
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.data.board.title, 'Budget build under $200');
+  assert.equal(created.data.board.audience.promise, 'Useful local LLM under $200');
+  const id = created.data.board.id;
+
+  const patched = await req(ctx.url, 'PATCH', `/api/boards/${id}`, {
+    title: 'Local LLM on a $200 mini PC',
+    audience: {
+      persona: 'Home lab tinkerer',
+      who: 'Home lab tinkerer',
+      alreadyKnow: 'Docker basics; no CUDA',
+      promise: 'Useful local LLM under $200',
+    },
+  });
+  assert.equal(patched.status, 200);
+  assert.equal(patched.data.board.title, 'Local LLM on a $200 mini PC');
+  assert.equal(patched.data.board.audience.promise, 'Useful local LLM under $200');
+
+  const canvas = await req(ctx.url, 'PUT', `/api/boards/${id}/canvas`, {
+    board: {
+      title: 'Local LLM on a $200 mini PC',
+      audience: patched.data.board.audience,
+    },
+    cards: patched.data.cards,
+    wires: [],
+    groups: [],
+    beats: [],
+  });
+  assert.equal(canvas.status, 200);
+  assert.match(canvas.data.board.title, /\$200/);
+  assert.match(canvas.data.board.audience.promise, /\$200/);
+
+  const got = await req(ctx.url, 'GET', `/api/boards/${id}`);
+  assert.match(got.data.board.title, /\$200/);
+  assert.match(got.data.board.audience.promise, /\$200/);
+});

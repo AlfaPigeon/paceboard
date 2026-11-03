@@ -1,0 +1,160 @@
+{
+  "board": {
+    "title": "Local LLM on a $200 mini PC",
+    "status": "Draft",
+    "targetRuntimeSec": 840,
+    "hoursCap": 30,
+    "hoursManual": 12.5,
+    "audience": {
+      "persona": "Home lab tinkerer",
+      "who": "Home lab tinkerer",
+      "alreadyKnow": "Docker basics; no CUDA",
+      "promise": "Useful local LLM under $200"
+    },
+    "meta": {
+      "targetWeek": "Week of Nov 10"
+    }
+  },
+  "layout": {
+    "Audience": {
+      "x": 16,
+      "y": 16,
+      "w": 272,
+      "h": 160
+    },
+    "Hook": {
+      "x": 304,
+      "y": 16,
+      "w": 200,
+      "h": 108
+    },
+    "Intro": {
+      "x": 304,
+      "y": 128,
+      "w": 200,
+      "h": 108
+    },
+    "Bench setup": {
+      "x": 516,
+      "y": 128,
+      "w": 200,
+      "h": 108
+    },
+    "Leave-behind": {
+      "x": 16,
+      "y": 196,
+      "w": 272,
+      "h": 120
+    },
+    "Run & compare": {
+      "x": 516,
+      "y": 248,
+      "w": 200,
+      "h": 108
+    },
+    "CTA": {
+      "x": 516,
+      "y": 368,
+      "w": 200,
+      "h": 108
+    }
+  },
+  "beats": [
+    {
+      "label": "Hook",
+      "plannedSec": 42,
+      "targetSec": 25,
+      "servesPromise": false,
+      "fit": "weak",
+      "clips": [
+        "a-roll \u00b7 cold open"
+      ]
+    },
+    {
+      "label": "Intro",
+      "plannedSec": 55,
+      "targetSec": 60,
+      "servesPromise": true,
+      "fit": "ok",
+      "clips": [
+        "a-roll"
+      ]
+    },
+    {
+      "label": "Bench setup",
+      "plannedSec": 260,
+      "targetSec": 240,
+      "servesPromise": true,
+      "fit": "ok",
+      "clips": [
+        "broll-ports",
+        "screen"
+      ]
+    },
+    {
+      "label": "Run & compare",
+      "plannedSec": 375,
+      "targetSec": 227,
+      "servesPromise": true,
+      "fit": "ok",
+      "clips": [
+        "screen-ollama"
+      ]
+    },
+    {
+      "label": "CTA",
+      "plannedSec": 28,
+      "targetSec": 30,
+      "servesPromise": true,
+      "fit": "ok",
+      "clips": [
+        "a-roll"
+      ]
+    }
+  ],
+  "noteBody": "Leave-behind: one command to pull a 7B model and a cost table vs cloud API.",
+  "media": [
+    {
+      "file": "a-roll-cold-open.mkv",
+      "label": "a-roll \u00b7 cold open",
+      "ready": true,
+      "color": "0x1a5f4a",
+      "seconds": 3
+    },
+    {
+      "file": "a-roll.mkv",
+      "label": "a-roll",
+      "ready": true,
+      "color": "0x2b4c7e",
+      "seconds": 3
+    },
+    {
+      "file": "broll-ports.mov",
+      "label": "broll-ports",
+      "ready": true,
+      "color": "0x8a5a2b",
+      "seconds": 2.5
+    },
+    {
+      "file": "screen.mkv",
+      "label": "screen",
+      "ready": true,
+      "color": "0x333333",
+      "seconds": 2.5
+    },
+    {
+      "file": "screen-ollama.mkv",
+      "label": "screen-ollama",
+      "ready": true,
+      "color": "0x4a3060",
+      "seconds": 4
+    },
+    {
+      "file": "broll-desk-inprogress.mkv",
+      "label": "broll-desk",
+      "ready": false,
+      "color": "0x666666",
+      "seconds": 25
+    }
+  ]
+}

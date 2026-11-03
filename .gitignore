@@ -31,3 +31,5 @@ cache/
 *.mp4
 *.prores
 *.mxf
+fixtures/demo-media/*
+!fixtures/demo-media/.gitkeep

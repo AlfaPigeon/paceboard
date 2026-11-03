@@ -111,9 +111,26 @@ function fmtSigned(sec) {
   return `${n > 0 ? '+' : '−'}${fmt(Math.abs(n))}`;
 }
 function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
+  // Map char-by-char via function replacer so user text like "$200" is never
+  // interpreted as a RegExp replacement pattern ($&, $1, …).
+  return String(s ?? '').replace(/[&<>"']/g, (c) => {
+    switch (c) {
+      case '&': return '&amp;';
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '"': return '&quot;';
+      case "'": return '&#39;';
+      default: return c;
+    }
+  });
+}
+
+/** Replace all matches with a literal string (no $-pattern expansion). */
+function replaceLiteral(haystack, pattern, literal) {
+  const re = pattern instanceof RegExp
+    ? pattern
+    : new RegExp(String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+  return String(haystack ?? '').replace(re, () => String(literal ?? ''));
 }
 function stagePill(status) {
   const s = String(status || '').toLowerCase();
@@ -421,7 +438,9 @@ function renderPalette() {
   const clips = media.map((m) => {
     const name = (m.sourcePath || '').split('/').pop() || m.id;
     const ready = m.status === 'ready';
-    const building = m.status === 'processing' || m.status === 'queued';
+    const failed = m.status === 'error' || m.status === 'cancelled';
+    // Pipeline statuses: pending → probing → proxy → thumbs → waveform → scenes → ready
+    const building = !ready && !failed;
     if (building) {
       const pct = Math.round((m.progress || 0) * 100);
       return `<div class="proxy-row"><strong>${escapeHtml(name)}</strong> · ProRes → H.264 proxy<br>
@@ -1206,7 +1225,7 @@ async function exportMd() {
   const blob = new Blob([text], { type: 'text/markdown' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `${(state.board.board.title || 'board').replace(/\W+/g, '-').toLowerCase()}.md`;
+  a.download = `${replaceLiteral((state.board.board.title || 'board').toLowerCase(), /[^a-z0-9]+/g, '-') || 'board'}.md`;
   a.click();
 }
 

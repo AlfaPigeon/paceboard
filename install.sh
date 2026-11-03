@@ -29,10 +29,11 @@ resolve_root() {
   # curl | bash (or missing checkout): clone into ~/paceboard (override with PACEBOARD_DIR)
   local dest="${PACEBOARD_DIR:-$HOME/paceboard}"
   if [[ ! -d "$dest/.git" ]]; then
-    echo "==> Cloning Paceboard into $dest"
-    git clone --branch "$REPO_BRANCH" --depth 1 "$REPO_URL" "$dest"
+    echo "==> Cloning Paceboard into $dest" >&2
+    git clone --branch "$REPO_BRANCH" --depth 1 "$REPO_URL" "$dest" >&2
   else
-    echo "==> Using existing clone at $dest"
+    echo "==> Updating existing clone at $dest" >&2
+    git -C "$dest" pull --ff-only >&2 || true
   fi
   echo "$dest"
 }
