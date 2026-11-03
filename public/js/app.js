@@ -26,6 +26,13 @@ const MARK_SVG = `<svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 3h
 function $(sel, el = document) { return el.querySelector(sel); }
 function $$(sel, el = document) { return [...el.querySelectorAll(sel)]; }
 
+function formatWeek(w) {
+  if (!w) return '';
+  const s = String(w).trim();
+  if (/^week\b/i.test(s)) return s;
+  return 'Week ' + s;
+}
+
 function fmt(sec) {
   const s = Math.max(0, Math.round(Number(sec) || 0));
   const m = Math.floor(s / 60);
@@ -293,7 +300,7 @@ function renderBoard() {
       <button class="btn btn-ghost" data-act="back-boards" style="padding:0 6px">←</button>
       <input class="title-edit" id="board-title" value="${escapeHtml(board.title)}" />
       ${stagePill(board.status)}
-      <span class="meta" id="board-week">${escapeHtml(board.meta?.targetWeek ? 'Week ' + board.meta.targetWeek : '')}</span>
+      <span class="meta" id="board-week">${escapeHtml(formatWeek(board.meta?.targetWeek))}</span>
       <div class="actions">
         <span class="meta mono">${fmt(pacing.totalPlannedSec)} / ${fmt(board.targetRuntimeSec)}</span>
         <button class="btn btn-secondary" data-act="open-pace">Pace</button>
@@ -303,20 +310,20 @@ function renderBoard() {
     </div>
     <div class="workspace">
       <aside class="palette" id="clip-palette">${renderPalette()}</aside>
+      <div class="tool-rail" aria-label="Add to canvas">
+        <button type="button" data-add="beat" title="Add beat">Beat</button>
+        <button type="button" data-add="note" title="Add note">Note</button>
+        <button type="button" data-add="audience" title="Add audience">Audience</button>
+      </div>
       <section class="canvas-panel" id="canvas-panel" aria-label="Board canvas">
-        <div class="tool-rail">
-          <button type="button" data-add="beat" title="Add beat">Beat</button>
-          <button type="button" data-add="note" title="Add note">Note</button>
-          <button type="button" data-add="audience" title="Audience">Aud</button>
-        </div>
         <div class="canvas-world" id="canvas-world" style="transform:translate(${state.pan.x}px,${state.pan.y}px) scale(${state.zoom})">
           <svg class="wires" id="wires"></svg>
           ${b.cards.map(renderCard).join('')}
         </div>
-        <div class="canvas-tools">
-          <button type="button" data-zoom="-">−</button>
-          <button type="button" data-zoom="reset">${Math.round(state.zoom * 100)}%</button>
-          <button type="button" data-zoom="+">+</button>
+        <div class="canvas-tools" role="group" aria-label="Zoom">
+          <button type="button" data-zoom="-" aria-label="Zoom out">−</button>
+          <button type="button" class="zoom-pct" data-zoom="reset" aria-label="Reset zoom">${Math.round(state.zoom * 100)}%</button>
+          <button type="button" data-zoom="+" aria-label="Zoom in">+</button>
         </div>
       </section>
     </div>
@@ -378,7 +385,7 @@ function renderCard(c) {
       <dl class="kv">
         <dt>Persona</dt><dd contenteditable="true" data-aud="persona">${escapeHtml(a.persona || a.who || '')}</dd>
         <dt>Already knows</dt><dd contenteditable="true" data-aud="alreadyKnow">${escapeHtml(a.alreadyKnow || '')}</dd>
-        <dt>Hook promise</dt><dd contenteditable="true" data-aud="promise">${escapeHtml(a.promise || '')}</dd>
+        <dt>Hook promise</dt><dd class="wrap" contenteditable="true" data-aud="promise">${escapeHtml(a.promise || '')}</dd>
       </dl>
     </article>`;
   }
@@ -566,7 +573,7 @@ function renderPace() {
   const hoursOn = hoursTotal > 0 || hours?.activityWatch?.ok;
 
   const maxCum = Math.max(pacing.targetRuntimeSec || 1, pacing.totalPlannedSec || 1, 1);
-  const chartW = 640; const chartH = 160; const padL = 40; const padR = 20; const padT = 20; const padB = 20;
+  const chartW = 640; const chartH = 180; const padL = 40; const padR = 28; const padT = 28; const padB = 24;
   const plotH = chartH - padT - padB;
   const n = Math.max(parts.length, 1);
   const pts = [];
@@ -612,7 +619,7 @@ function renderPace() {
               <span><i class="dot" style="background:var(--text);width:12px;height:1px;border-radius:0;vertical-align:middle;display:inline-block"></i>Target ${fmt(b.board.targetRuntimeSec)}</span>
               <span><i class="dot" style="background:var(--chart-3)"></i>Over part target</span>
             </div>
-            <svg viewBox="0 0 ${chartW} ${chartH}" preserveAspectRatio="none" style="width:100%;height:160px;display:block">
+            <svg viewBox="0 0 ${chartW} ${chartH}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:180px;display:block">
               <line x1="${padL}" y1="${padT}" x2="${chartW - padR}" y2="${padT}" stroke="var(--grid)"/>
               <line x1="${padL}" y1="${padT + plotH / 3}" x2="${chartW - padR}" y2="${padT + plotH / 3}" stroke="var(--grid)"/>
               <line x1="${padL}" y1="${padT + 2 * plotH / 3}" x2="${chartW - padR}" y2="${padT + 2 * plotH / 3}" stroke="var(--grid)"/>
@@ -620,10 +627,15 @@ function renderPace() {
               <line x1="${padL}" y1="${targetY}" x2="${chartW - padR}" y2="${targetY}" stroke="var(--text)" stroke-dasharray="4 4"/>
               <path d="${area}" fill="var(--chart-1)" opacity="0.08"/>
               <polyline points="${poly}" fill="none" stroke="var(--chart-1)" stroke-width="2"/>
-              ${pts.filter((p) => p.slow).map((p) => `
+              ${pts.filter((p) => p.slow).map((p) => {
+                const above = p.y >= padT + 22;
+                const labelY = above ? p.y - 16 : p.y + 18;
+                const labelX = Math.min(chartW - padR - 36, Math.max(padL, p.x + 8));
+                return `
                 <circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--chart-3)"/>
-                <text x="${p.x + 8}" y="${p.y - 6}" font-size="10" fill="var(--warning)" font-family="IBM Plex Sans, sans-serif">${fmtSigned(p.overBy)}</text>
-              `).join('')}
+                <rect x="${labelX - 3}" y="${labelY - 10}" width="38" height="13" rx="2" fill="#ffffff" stroke="var(--border)" stroke-width="0.5"/>
+                <text x="${labelX}" y="${labelY}" font-size="10" fill="var(--warning)" font-family="IBM Plex Mono, monospace">${fmtSigned(p.overBy)}</text>`;
+              }).join('')}
             </svg>
             <div class="plan-labels" style="font-size:11px;color:var(--muted)">
               ${parts.map((p) => `<span>${escapeHtml((p.label || '').split(' ')[0] || '·')}</span>`).join('')}
@@ -650,22 +662,25 @@ function renderPace() {
           <p class="muted" style="font-size:14px;margin:4px 0 16px">Each beat vs its own target. Flagged rows are over.</p>
           <div class="parts">
             <table>
-              <thead><tr><th>Beat</th><th class="num">Plan</th><th class="num">Target</th><th>Fit</th></tr></thead>
+              <thead><tr><th>Beat</th><th class="num">Plan</th><th class="num">Target</th><th>Fit</th><th class="num">Delta</th></tr></thead>
               <tbody>
                 ${parts.map((p) => {
-                  const ratio = p.targetSec ? Math.min(160, (p.plannedSec / p.targetSec) * 100) : 0;
+                  const ratio = p.targetSec ? Math.min(100, (p.plannedSec / p.targetSec) * 100) : 0;
+                  const delta = p.slow ? fmtSigned(p.overBy) : (p.targetSec != null ? '—' : '—');
                   return `<tr class="${p.slow ? 'flag' : ''}">
                     <td>${escapeHtml(p.label)}</td>
                     <td class="num">${fmt(p.plannedSec)}</td>
                     <td class="num">${p.targetSec != null ? fmt(p.targetSec) : '—'}</td>
-                    <td><span class="bullet"><i style="width:${ratio}%;${p.slow ? 'background:var(--chart-3)' : ''}"></i></span>${p.slow ? `<span style="color:var(--warning);font-size:12px;font-weight:500">${fmtSigned(p.overBy)}</span>` : ''}</td>
+                    <td class="fit-cell"><span class="bullet"><i style="width:${ratio}%;${p.slow ? 'background:var(--chart-3)' : ''}"></i></span></td>
+                    <td class="num delta-cell ${p.slow ? 'over' : ''}">${p.slow ? delta : '—'}</td>
                   </tr>`;
                 }).join('')}
                 <tr>
                   <td style="font-weight:500">Total</td>
                   <td class="num" style="font-weight:500">${fmt(pacing.totalPlannedSec)}</td>
                   <td class="num">${fmt(b.board.targetRuntimeSec)}</td>
-                  <td style="color:var(--positive);font-size:12px">${headroom >= 0 ? fmt(headroom) + ' under' : fmtSigned(-headroom) + ' over'}</td>
+                  <td class="fit-cell"></td>
+                  <td class="num delta-cell ${headroom >= 0 ? 'under' : 'over'}">${headroom >= 0 ? fmt(headroom) + ' under' : fmtSigned(-headroom) + ' over'}</td>
                 </tr>
               </tbody>
             </table>

@@ -6,6 +6,27 @@ Infinite canvas for beats, notes, clips, references, and audience cards; Notion 
 
 > Working name **Cutline** (rename in `public/js/brand.js`). Framed-sheet UI; tokens in `public/css/tokens.css` (dark-mode ready, light-only in v1).
 
+## Screenshots
+
+Non-personal demo board (local seed data only — not shipped as product defaults).
+
+![Canvas — beats, audience, clips, timeline](docs/screenshots/canvas.png)
+
+*Canvas — board canvas with clips, audience card, beat graph, timeline and hours meter.*
+
+![Pace & parts — curve and table](docs/screenshots/pace-parts.png)
+
+*Pace & parts — cumulative pace curve, hours against cap, and per-beat plan vs target.*
+
+![Notion mapping — confirm-only](docs/screenshots/notion-mapping.png)
+
+*Notion — pre-filled field mapping and side-by-side conflict (Keep local / Keep Notion / Edit).*
+
+![First-run empty state](docs/screenshots/first-run.png)
+
+*First-run — empty boards with setup steps and muted hours meter.*
+
+
 ## Requirements (Arch)
 
 - Node.js 20+
