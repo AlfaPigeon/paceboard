@@ -628,12 +628,12 @@ function renderPace() {
               <path d="${area}" fill="var(--chart-1)" opacity="0.08"/>
               <polyline points="${poly}" fill="none" stroke="var(--chart-1)" stroke-width="2"/>
               ${pts.filter((p) => p.slow).map((p) => {
-                const above = p.y >= padT + 22;
-                const labelY = above ? p.y - 16 : p.y + 18;
-                const labelX = Math.min(chartW - padR - 36, Math.max(padL, p.x + 8));
+                const above = p.y >= padT + 26;
+                const labelY = above ? p.y - 22 : p.y + 22;
+                const labelX = Math.min(chartW - padR - 40, Math.max(padL, p.x - 4));
                 return `
                 <circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--chart-3)"/>
-                <rect x="${labelX - 3}" y="${labelY - 10}" width="38" height="13" rx="2" fill="#ffffff" stroke="var(--border)" stroke-width="0.5"/>
+                <rect x="${labelX - 4}" y="${labelY - 11}" width="40" height="14" rx="2" fill="#ffffff" stroke="var(--border)" stroke-width="0.75"/>
                 <text x="${labelX}" y="${labelY}" font-size="10" fill="var(--warning)" font-family="IBM Plex Mono, monospace">${fmtSigned(p.overBy)}</text>`;
               }).join('')}
             </svg>

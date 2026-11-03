@@ -291,7 +291,8 @@ textarea.input { height: auto; padding: 8px 10px; resize: vertical; }
   position: relative; overflow: hidden;
 }
 .parts .bullet i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--chart-1); border-radius: 2px; max-width: 100%; }
-.parts .fit-cell { white-space: nowrap; }
+.parts .fit-cell { white-space: nowrap; padding-right: 8px; width: 100px; }
+.parts .delta-cell { padding-left: 12px; min-width: 72px; }
 .parts .delta-cell { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
 .parts .delta-cell.over { color: var(--warning); font-weight: 500; }
 .parts .delta-cell.under { color: var(--positive); }
