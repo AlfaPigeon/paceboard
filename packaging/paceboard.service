@@ -7,8 +7,10 @@ Type=simple
 WorkingDirectory=%h/paceboard
 Environment=PACEBOARD_PORT=3200
 Environment=PACEBOARD_DATA=%h/.local/share/paceboard
+Environment=NODE_ENV=production
 ExecStart=/usr/bin/node %h/paceboard/src/server.js
 Restart=on-failure
+RestartSec=3
 
 [Install]
 WantedBy=default.target

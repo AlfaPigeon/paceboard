@@ -120,15 +120,12 @@ Categories=AudioVideo;Office;
 StartupNotify=true
 DESK
 
-mkdir -p "$ROOT/packaging"
-cp "$HOME/.config/systemd/user/$UNIT_NAME" "$ROOT/packaging/$UNIT_NAME"
-cp "$HOME/.local/share/applications/$DESKTOP_NAME" "$ROOT/packaging/$DESKTOP_NAME"
+# Packaging templates under packaging/ stay portable (%h/paceboard); do not overwrite them
+# with machine-specific generated units.
 # Drop legacy Storyboard unit names if present from earlier installs
 rm -f "$HOME/.config/systemd/user/storyboard.service" \
       "$HOME/.local/share/applications/storyboard.desktop" \
-      "$HOME/.local/bin/storyboard" \
-      "$ROOT/packaging/storyboard.service" \
-      "$ROOT/packaging/storyboard.desktop" 2>/dev/null || true
+      "$HOME/.local/bin/storyboard" 2>/dev/null || true
 
 systemctl --user daemon-reload 2>/dev/null || true
 systemctl --user enable --now "$UNIT_NAME" 2>/dev/null || true
