@@ -1,10 +1,10 @@
-# Cutline _(working name, pending)_
+# Paceboard
 
-Cutline — local storyboard and ideation tool for planning YouTube videos.
+Paceboard — a local canvas for planning YouTube videos before you edit.
 
 Infinite canvas for beats, notes, clips, references, and audience cards; Notion idea-pipeline sync; local MKV / ProRes / DNxHR proxying for browser playback; timeline pacing; work-hours budget (optional ActivityWatch); Markdown / JSON export.
 
-> Working name **Cutline** (rename in `public/js/brand.js`). Framed-sheet UI; tokens in `public/css/tokens.css` (dark-mode ready, light-only in v1).
+Framed-sheet UI (IBM Plex, teal accent). Tokens in `public/css/tokens.css` (dark-mode ready; light-only in v1). Product name lives in `public/js/brand.js`.
 
 ## Screenshots
 
@@ -26,47 +26,55 @@ Non-personal demo board (local seed data only — not shipped as product default
 
 *First-run — empty boards with setup steps and muted hours meter.*
 
-
 ## Requirements (Arch)
 
 - Node.js 20+
 - npm
 - ffmpeg (provides `ffmpeg` and `ffprobe`)
+- git (for clone / one-line install)
 
 ```bash
-sudo pacman -S --needed nodejs npm ffmpeg
+sudo pacman -S --needed nodejs npm ffmpeg git
 ```
 
 ## Install
 
+One-liner (clones into `~/paceboard` if needed, then installs):
+
 ```bash
-git clone <this-repo> storyboard
-cd storyboard
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/AlfaPigeon/paceboard/main/install.sh | bash
 ```
 
-This installs npm deps, a `systemd --user` service, a `~/.local/bin/storyboard` wrapper, and a `.desktop` launcher that opens `http://127.0.0.1:3200/`.
-
-Default port is **3200** (override with `STORYBOARD_PORT`). Data and secrets live under `./data/` (gitignored).
+Or clone and install yourself:
 
 ```bash
-# manual run
+git clone https://github.com/AlfaPigeon/paceboard.git && cd paceboard && ./install.sh
+```
+
+`install.sh` installs npm deps, a `systemd --user` service (`paceboard.service`), a `~/.local/bin/paceboard` wrapper, and a `.desktop` launcher that opens `http://127.0.0.1:3200/`.
+
+- Default port **3200** (override with `PACEBOARD_PORT`)
+- Runtime data / secrets: `~/.local/share/paceboard` (override with `PACEBOARD_DATA`); a local `./data/` folder is also used when you run from source without the env var
+- Settings (including Notion token) stay on disk only and are gitignored
+
+```bash
+# manual run from a checkout
 npm start
 
 # tests
 npm test
 
-# uninstall service/launcher only
+# uninstall service/launcher only (keeps files + data)
 ./uninstall.sh
 ```
 
-## Features
+## Connect Notion
 
-### Boards / canvas
-One board per video idea. Cards (`beat`, `note`, `clip`, `reference`, `audience`), groups/sections, wires, drag + pan/zoom, autosave via `PUT /api/boards/:id/canvas`.
-
-### Notion sync
-Settings → paste a Notion **internal integration** token and database id. Fetch schema, apply suggested property mapping, import rows as boards, push title/stage/mapped fields back with `last_edited_time` conflict detection (`409` unless `force`).
+1. In Notion, open **Settings → Connections → Develop or manage integrations** and create an **internal integration**. Copy the secret (token).
+2. Open the database you use as your idea pipeline → **••• → Connections** → invite / share that integration so it can read and write the database. Copy the database id from the browser URL (`…/workspace/<database_id>?v=…`).
+3. In Paceboard go to **Settings → Notion**, paste the token and database id, click **Save connection**, then **Fetch schema**.
+4. Review the suggested property mapping and click **Confirm mapping** (confirm-only — nothing is overwritten until you import / push).
+5. Import rows as boards from **Pipeline**, or open a board and **Sync** to push mapped fields back. Conflicts use `last_edited_time` and offer Keep local / Keep Notion / Edit.
 
 Suggested default mapping (names only — no personal database ids ship in the repo):
 
@@ -79,6 +87,24 @@ Suggested default mapping (names only — no personal database ids ship in the r
 | link | Link |
 | target_week | Target week |
 
+## Optional: ActivityWatch hours
+
+Paceboard can sum window-watcher time for Resolve / OBS (read-only) into the board hours budget.
+
+1. Install and run [ActivityWatch](https://activitywatch.net/) locally (default `http://localhost:5600`).
+2. In **Settings → Hours**, enable ActivityWatch, adjust the base URL / app name filters if needed.
+3. Per-board, set the hours cap (default **30h**) and optional title keyword / start date filters.
+
+If ActivityWatch is down, the UI keeps working with manual hour logs only.
+
+## Features
+
+### Boards / canvas
+One board per video idea. Cards (`beat`, `note`, `clip`, `reference`, `audience`), groups/sections, wires, drag + pan/zoom, autosave via `PUT /api/boards/:id/canvas`.
+
+### Notion sync
+Confirm-only mapping, import rows as boards, push title/stage/mapped fields with `last_edited_time` conflict detection (`409` unless `force`).
+
 ### Local video
 Browse disk paths or upload. Sources are never modified. Background jobs probe with ffprobe, build an H.264 720p AAC proxy, thumbnail strip, waveform peaks, and scene cuts → clip cards with in/out points. Cache key = file hash + mtime.
 
@@ -90,8 +116,8 @@ Ordered beats with planned durations and optional clip in/out. Flags use simple 
 ### Audience fit
 Per-board audience card (who / already know / promise / persona). Beats can be marked as not serving the promise; the side panel lists orphans.
 
-### Work hours (optional)
-Per-board cap (default 30h, configurable). Manual hour entries always work. Optionally enable ActivityWatch (`http://localhost:5600` by default, **off** by default, **read-only**): sum window-watcher time for Resolve / OBS (configurable), with per-board title keyword + start date filters. If AW is down, the UI degrades gracefully.
+### Work hours
+Per-board cap (default 30h). Manual hour entries always work. Optional ActivityWatch (off by default, read-only).
 
 ### Export
 - Markdown script outline + shot list: `GET /api/export/:id/markdown`
@@ -121,4 +147,4 @@ Per-board cap (default 30h, configurable). Manual hour entries always work. Opti
 
 ## License
 
-MIT
+MIT © AlfaPigeon

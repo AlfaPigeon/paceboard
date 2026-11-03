@@ -1,13 +1,48 @@
 #!/usr/bin/env bash
+# Paceboard installer (Arch-oriented). Safe to run from a clone, or:
+#   curl -fsSL https://raw.githubusercontent.com/AlfaPigeon/paceboard/main/install.sh | bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
-PORT="${STORYBOARD_PORT:-3200}"
-APP_ID="storyboard"
+REPO_URL="${PACEBOARD_REPO:-https://github.com/AlfaPigeon/paceboard.git}"
+REPO_BRANCH="${PACEBOARD_BRANCH:-main}"
+PORT="${PACEBOARD_PORT:-3200}"
+APP_ID="paceboard"
 UNIT_NAME="${APP_ID}.service"
 DESKTOP_NAME="${APP_ID}.desktop"
+DATA_HOME="${PACEBOARD_DATA:-$HOME/.local/share/paceboard}"
 
-echo "==> Storyboard install (Arch-oriented)"
+resolve_root() {
+  # Prefer the directory that contains this script when it is a real file in a clone.
+  if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" != "-" && -f "${BASH_SOURCE[0]}" ]]; then
+    local d
+    d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [[ -f "$d/package.json" ]]; then
+      echo "$d"
+      return
+    fi
+  fi
+  # Already inside a checkout
+  if [[ -f ./package.json ]] && grep -q '"name": "paceboard"' ./package.json 2>/dev/null; then
+    pwd
+    return
+  fi
+  # curl | bash (or missing checkout): clone into ~/paceboard (override with PACEBOARD_DIR)
+  local dest="${PACEBOARD_DIR:-$HOME/paceboard}"
+  if [[ ! -d "$dest/.git" ]]; then
+    echo "==> Cloning Paceboard into $dest"
+    git clone --branch "$REPO_BRANCH" --depth 1 "$REPO_URL" "$dest"
+  else
+    echo "==> Using existing clone at $dest"
+  fi
+  echo "$dest"
+}
+
+ROOT="$(resolve_root)"
+cd "$ROOT"
+
+echo "==> Paceboard install (Arch-oriented)"
+echo "    Root: $ROOT"
+echo "    Data: $DATA_HOME"
 
 need_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -22,6 +57,7 @@ need_cmd node nodejs
 need_cmd npm npm
 need_cmd ffmpeg ffmpeg
 need_cmd ffprobe ffmpeg
+need_cmd git git
 if [[ "$MISSING" -eq 1 ]]; then
   echo "Install the packages above, then re-run ./install.sh"
   exit 1
@@ -34,32 +70,35 @@ if [[ "$NODE_MAJOR" -lt 20 ]]; then
 fi
 
 echo "==> npm install"
-cd "$ROOT"
 npm install --omit=dev
 
-mkdir -p "$ROOT/data"/{media,uploads,cache}
+mkdir -p "$DATA_HOME"/{media,uploads,cache}
 mkdir -p "$HOME/.config/systemd/user"
 mkdir -p "$HOME/.local/share/applications"
 mkdir -p "$HOME/.local/bin"
 
-# Wrapper so the unit and desktop file can find the app
-cat > "$HOME/.local/bin/storyboard" <<WRAP
+# Dev convenience: keep a local ./data symlink-or-dir for gitignored scratch when running from source
+mkdir -p "$ROOT/data"/{media,uploads,cache}
+
+cat > "$HOME/.local/bin/paceboard" <<WRAP
 #!/usr/bin/env bash
-export STORYBOARD_PORT="\${STORYBOARD_PORT:-$PORT}"
+export PACEBOARD_PORT="\${PACEBOARD_PORT:-$PORT}"
+export PACEBOARD_DATA="\${PACEBOARD_DATA:-$DATA_HOME}"
 cd "$ROOT"
 exec node src/server.js
 WRAP
-chmod +x "$HOME/.local/bin/storyboard"
+chmod +x "$HOME/.local/bin/paceboard"
 
 cat > "$HOME/.config/systemd/user/$UNIT_NAME" <<UNIT
 [Unit]
-Description=Storyboard local video ideation app
+Description=Paceboard local YouTube planning app
 After=network.target
 
 [Service]
 Type=simple
 WorkingDirectory=$ROOT
-Environment=STORYBOARD_PORT=$PORT
+Environment=PACEBOARD_PORT=$PORT
+Environment=PACEBOARD_DATA=$DATA_HOME
 Environment=NODE_ENV=production
 ExecStart=$(command -v node) $ROOT/src/server.js
 Restart=on-failure
@@ -71,8 +110,8 @@ UNIT
 
 cat > "$HOME/.local/share/applications/$DESKTOP_NAME" <<DESK
 [Desktop Entry]
-Name=Storyboard
-Comment=YouTube storyboard and ideation canvas
+Name=Paceboard
+Comment=Plan YouTube videos before you edit
 Exec=xdg-open http://127.0.0.1:$PORT/
 Icon=video-x-generic
 Terminal=false
@@ -81,19 +120,26 @@ Categories=AudioVideo;Office;
 StartupNotify=true
 DESK
 
-# Also keep copies in packaging/ for reference
 mkdir -p "$ROOT/packaging"
 cp "$HOME/.config/systemd/user/$UNIT_NAME" "$ROOT/packaging/$UNIT_NAME"
 cp "$HOME/.local/share/applications/$DESKTOP_NAME" "$ROOT/packaging/$DESKTOP_NAME"
+# Drop legacy Storyboard unit names if present from earlier installs
+rm -f "$HOME/.config/systemd/user/storyboard.service" \
+      "$HOME/.local/share/applications/storyboard.desktop" \
+      "$HOME/.local/bin/storyboard" \
+      "$ROOT/packaging/storyboard.service" \
+      "$ROOT/packaging/storyboard.desktop" 2>/dev/null || true
 
-systemctl --user daemon-reload
-systemctl --user enable --now "$UNIT_NAME" || true
+systemctl --user daemon-reload 2>/dev/null || true
+systemctl --user enable --now "$UNIT_NAME" 2>/dev/null || true
 
 echo
 echo "Installed."
 echo "  App:     $ROOT"
+echo "  Data:    $DATA_HOME"
 echo "  Service: systemctl --user status $UNIT_NAME"
 echo "  Open:    http://127.0.0.1:$PORT/"
 echo "  Desktop: $HOME/.local/share/applications/$DESKTOP_NAME"
+echo "  CLI:     paceboard   (or: npm start)"
 echo
-echo "If the service failed to start in this environment, run: npm start"
+echo "If the user service failed to start in this environment, run: npm start"

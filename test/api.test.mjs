@@ -5,11 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { createServer } from 'node:http';
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'storyboard-api-'));
-process.env.STORYBOARD_DATA = tmp;
-process.env.STORYBOARD_DB = path.join(tmp, 'test.sqlite');
-process.env.STORYBOARD_NO_LISTEN = '1';
-process.env.STORYBOARD_PORT = '3210';
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'paceboard-api-'));
+process.env.PACEBOARD_DATA = tmp;
+process.env.PACEBOARD_DB = path.join(tmp, 'test.sqlite');
+process.env.PACEBOARD_NO_LISTEN = '1';
+process.env.PACEBOARD_PORT = '3210';
 
 const { default: app } = await import('../src/server.js');
 

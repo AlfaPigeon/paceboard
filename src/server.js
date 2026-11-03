@@ -20,7 +20,7 @@ getDb();
 loadSettings();
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, name: 'cutline', port: Number(process.env.STORYBOARD_PORT || DEFAULT_PORT) });
+  res.json({ ok: true, name: 'paceboard', port: Number(process.env.PACEBOARD_PORT || DEFAULT_PORT) });
 });
 
 app.use('/api/boards', boards);
@@ -47,10 +47,10 @@ app.get(['/board', '/board.html'], (_req, res) => {
   res.sendFile(path.join(ROOT, 'public', 'index.html'));
 });
 
-const port = Number(process.env.STORYBOARD_PORT || DEFAULT_PORT);
-if (process.env.STORYBOARD_NO_LISTEN !== '1') {
+const port = Number(process.env.PACEBOARD_PORT || DEFAULT_PORT);
+if (process.env.PACEBOARD_NO_LISTEN !== '1') {
   app.listen(port, HOST, () => {
-    console.log(`Cutline listening on http://${HOST}:${port}`);
+    console.log(`Paceboard listening on http://${HOST}:${port}`);
   });
 }
 

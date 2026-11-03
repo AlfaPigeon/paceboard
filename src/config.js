@@ -4,15 +4,15 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '..');
-export const DATA_DIR = process.env.STORYBOARD_DATA || path.join(ROOT, 'data');
-export const DB_PATH = process.env.STORYBOARD_DB || path.join(DATA_DIR, 'storyboard.sqlite');
+export const DATA_DIR = process.env.PACEBOARD_DATA || path.join(ROOT, 'data');
+export const DB_PATH = process.env.PACEBOARD_DB || path.join(DATA_DIR, 'paceboard.sqlite');
 export const MEDIA_DIR = path.join(DATA_DIR, 'media');
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 export const CACHE_DIR = path.join(DATA_DIR, 'cache');
 export const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
 
-export const DEFAULT_PORT = Number(process.env.STORYBOARD_PORT || 3200);
-export const HOST = process.env.STORYBOARD_HOST || '127.0.0.1';
+export const DEFAULT_PORT = Number(process.env.PACEBOARD_PORT || 3200);
+export const HOST = process.env.PACEBOARD_HOST || '127.0.0.1';
 
 export const DEFAULT_SETTINGS = {
   notion: {

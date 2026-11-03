@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=Storyboard
-Comment=YouTube storyboard and ideation canvas
+Name=Paceboard
+Comment=Plan YouTube videos before you edit
 Exec=xdg-open http://127.0.0.1:3200/
 Icon=video-x-generic
 Terminal=false

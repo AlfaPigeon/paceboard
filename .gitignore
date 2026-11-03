@@ -2,10 +2,32 @@ node_modules/
 data/
 *.db
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
 .env
-.env.local
+.env.*
+!.env.example
 settings.local.json
+settings.json
+**/settings.json
 .DS_Store
 coverage/
 tmp/
 *.log
+*.pem
+*.key
+
+# Screenshot scratch / local crops (committed baselines live in docs/screenshots/)
+screenshots/
+!docs/screenshots/
+!docs/screenshots/**
+
+# Demo / local media caches (never ship personal footage)
+media/
+uploads/
+cache/
+*.mkv
+*.mov
+*.mp4
+*.prores
+*.mxf

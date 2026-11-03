@@ -5,10 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'storyboard-media-'));
-process.env.STORYBOARD_DATA = tmp;
-process.env.STORYBOARD_DB = path.join(tmp, 'media.sqlite');
-process.env.STORYBOARD_NO_LISTEN = '1';
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'paceboard-media-'));
+process.env.PACEBOARD_DATA = tmp;
+process.env.PACEBOARD_DB = path.join(tmp, 'media.sqlite');
+process.env.PACEBOARD_NO_LISTEN = '1';
 
 const ff = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' });
 if (ff.status !== 0) {

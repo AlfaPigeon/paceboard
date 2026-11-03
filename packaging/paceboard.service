@@ -1,0 +1,14 @@
+[Unit]
+Description=Paceboard local YouTube planning app
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/paceboard
+Environment=PACEBOARD_PORT=3200
+Environment=PACEBOARD_DATA=%h/.local/share/paceboard
+ExecStart=/usr/bin/node %h/paceboard/src/server.js
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
