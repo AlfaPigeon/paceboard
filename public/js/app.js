@@ -714,23 +714,27 @@ function renderPace() {
               <path d="${area}" fill="var(--chart-1)" opacity="0.08"/>
               <polyline points="${poly}" fill="none" stroke="var(--chart-1)" stroke-width="2"/>
               ${pts.filter((p) => p.slow).map((p) => {
-                // Always up-and-left of the dot — never intersect the curve or the target line
+                // Prefer up-and-left. If the gap from the target line down to the dot is tight
+                // (~16px + tag height), place the tag below the dot instead — and to the RIGHT
+                // so it clears the rising segment that approaches the peak from the left.
                 const tagW = 42;
                 const tagH = 13;
-                let labelX = p.x - tagW - 10;
-                let labelY = p.y - 20;
-                if (labelX < 4) labelX = Math.min(p.x + 12, chartW - padR - tagW);
-                // Keep the whole tag (labelY-10 .. labelY-10+tagH) clear above the target line when near it
-                const tagTop = () => labelY - 10;
-                const tagBot = () => labelY - 10 + tagH;
-                if (tagBot() >= targetY - 2 && tagTop() <= targetY + 2) {
-                  // Prefer above the target line
-                  labelY = targetY - 6;
+                const roomAboveToTarget = p.y - targetY;
+                const placeBelow = roomAboveToTarget <= 16 + tagH;
+                let labelX, labelY;
+                if (placeBelow) {
+                  labelX = Math.min(p.x + 10, chartW - padR - tagW);
+                  labelY = p.y + 20;
+                  if (labelY > padT + plotH - 2) labelY = padT + plotH - 2;
+                } else {
+                  labelX = p.x - tagW - 10;
+                  labelY = p.y - 20;
+                  if (labelX < 4) labelX = Math.min(p.x + 12, chartW - padR - tagW);
+                  const tagTop = labelY - 10;
+                  const tagBot = labelY - 10 + tagH;
+                  if (tagBot >= targetY - 2 && tagTop <= targetY + 2) labelY = targetY - (tagH + 4);
+                  if (labelY - 10 < 3) labelY = 13;
                 }
-                if (tagTop() < 3) labelY = 3 + 10;
-                // Ensure still above the vertex
-                if (labelY > p.y - 14) labelY = Math.min(targetY - 6, p.y - 20);
-                if (labelY - 10 < 3) labelY = 13;
                 return `
                 <circle cx="${p.x}" cy="${p.y}" r="4.5" fill="var(--chart-3)" stroke="#fff" stroke-width="1"/>
                 <rect x="${labelX - 3}" y="${labelY - 10}" width="${tagW}" height="${tagH}" rx="2" fill="#ffffff" stroke="var(--border)" stroke-width="0.75"/>
