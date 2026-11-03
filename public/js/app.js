@@ -26,6 +26,72 @@ const MARK_SVG = `<svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 3h
 function $(sel, el = document) { return el.querySelector(sel); }
 function $$(sel, el = document) { return [...el.querySelectorAll(sel)]; }
 
+function cardSize(c) {
+  const w = Number(c.w) || (c.type === 'beat' ? 200 : c.type === 'note' ? 220 : c.type === 'audience' ? 280 : 240);
+  const h = Number(c.h) || (c.type === 'audience' ? 150 : c.type === 'note' ? 110 : 108);
+  return { w, h };
+}
+
+function rectsOverlap(a, b, gap = 16) {
+  return !(a.x + a.w + gap <= b.x || b.x + b.w + gap <= a.x || a.y + a.h + gap <= b.y || b.y + b.h + gap <= a.y);
+}
+
+function findFreeCardSpot(w, h, existing) {
+  const rects = existing.map((c) => {
+    const s = cardSize(c);
+    return { x: c.x, y: c.y, w: s.w, h: s.h };
+  });
+  let x = 24; let y = 24;
+  for (let i = 0; i < 100; i++) {
+    const cand = { x, y, w, h };
+    if (!rects.some((r) => rectsOverlap(cand, r))) return { x, y };
+    x += 48;
+    if (x > 820) { x = 24; y += 56; }
+  }
+  return { x: 24 + Math.random() * 40, y: 24 + Math.random() * 40 };
+}
+
+function shortBeatLabel(label) {
+  const s = String(label || '').trim();
+  if (!s) return '·';
+  if (s.length <= 12) return s;
+  if (/^run/i.test(s)) return 'Run & cmp';
+  if (/^bench/i.test(s)) return 'Bench setup';
+  return s.slice(0, 11) + '…';
+}
+
+function fitBoardToView() {
+  const panel = $('#canvas-panel');
+  const world = $('#canvas-world');
+  if (!panel || !world || !state.board?.cards?.length) return;
+  const cards = state.board.cards;
+  let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+  for (const c of cards) {
+    const { w, h } = cardSize(c);
+    minX = Math.min(minX, c.x);
+    minY = Math.min(minY, c.y);
+    maxX = Math.max(maxX, c.x + w);
+    maxY = Math.max(maxY, c.y + h);
+  }
+  const pad = 28;
+  const zoomReserveX = 120; // keep clear of zoom control
+  const zoomReserveY = 56;
+  const vw = Math.max(120, panel.clientWidth - pad * 2 - zoomReserveX);
+  const vh = Math.max(120, panel.clientHeight - pad * 2 - zoomReserveY);
+  const bw = Math.max(1, maxX - minX);
+  const bh = Math.max(1, maxY - minY);
+  const zoom = Math.min(1, Math.max(0.45, Math.min(vw / bw, vh / bh)));
+  state.zoom = zoom;
+  const contentW = bw * zoom;
+  const contentH = bh * zoom;
+  // Prefer top-left padding; leave bottom-right for zoom chrome
+  state.pan.x = pad - minX * zoom + Math.max(0, (vw - contentW) / 2);
+  state.pan.y = pad - minY * zoom + Math.max(0, (vh - contentH) / 2);
+  world.style.transform = `translate(${state.pan.x}px,${state.pan.y}px) scale(${state.zoom})`;
+  const pct = document.querySelector('.canvas-tools .zoom-pct');
+  if (pct) pct.textContent = `${Math.round(state.zoom * 100)}%`;
+}
+
 function formatWeek(w) {
   if (!w) return '';
   const s = String(w).trim();
@@ -344,6 +410,10 @@ function renderBoard() {
     </div>`;
   bindBoard();
   drawWires();
+  requestAnimationFrame(() => {
+    fitBoardToView();
+    drawWires();
+  });
 }
 
 function renderPalette() {
@@ -530,7 +600,10 @@ function bindBoard() {
 
 function addCard(type) {
   const id = 'card_' + Math.random().toString(36).slice(2, 10);
-  const base = { id, type, title: type === 'beat' ? 'Beat' : type === 'audience' ? 'Audience' : '', body: '', x: 120 + Math.random() * 80, y: 80 + Math.random() * 80, w: type === 'beat' ? 200 : 240, h: 140, z: 1, data: {} };
+  const w = type === 'beat' ? 200 : type === 'audience' ? 280 : 220;
+  const h = type === 'audience' ? 150 : type === 'note' ? 110 : 108;
+  const spot = findFreeCardSpot(w, h, state.board.cards || []);
+  const base = { id, type, title: type === 'beat' ? 'Beat' : type === 'audience' ? 'Audience' : '', body: '', x: spot.x, y: spot.y, w, h, z: 1, data: {} };
   if (type === 'beat') {
     const beatId = 'beat_' + Math.random().toString(36).slice(2, 10);
     const ord = state.board.beats.length;
@@ -573,21 +646,28 @@ function renderPace() {
   const hoursOn = hoursTotal > 0 || hours?.activityWatch?.ok;
 
   const maxCum = Math.max(pacing.targetRuntimeSec || 1, pacing.totalPlannedSec || 1, 1);
-  const chartW = 640; const chartH = 180; const padL = 40; const padR = 28; const padT = 28; const padB = 24;
+  const chartW = 640; const chartH = 200; const padL = 40; const padR = 28; const padT = 28; const padB = 36;
+  const plotW = chartW - padL - padR;
   const plotH = chartH - padT - padB;
   const n = Math.max(parts.length, 1);
   const pts = [];
   let cum = 0;
   parts.forEach((p, i) => {
     cum += p.plannedSec || 0;
-    const x = padL + ((i + 1) / n) * (chartW - padL - padR);
+    // Point at END of this beat's segment
+    const x = padL + ((i + 1) / n) * plotW;
+    const xMid = padL + ((i + 0.5) / n) * plotW;
     const y = padT + plotH - (cum / maxCum) * plotH;
-    pts.push({ x, y, cum, overBy: p.overBy, label: p.label, slow: p.slow });
+    pts.push({ x, xMid, y, cum, overBy: p.overBy, label: p.label, slow: p.slow, i });
   });
-  if (!pts.length) pts.push({ x: padL, y: padT + plotH, cum: 0 });
+  if (!pts.length) pts.push({ x: padL, xMid: padL, y: padT + plotH, cum: 0 });
   const poly = [`${padL},${padT + plotH}`, ...pts.map((p) => `${p.x},${p.y}`)].join(' ');
   const area = `M${padL},${padT + plotH} ` + pts.map((p) => `L${p.x},${p.y}`).join(' ') + ` L${pts[pts.length - 1].x},${padT + plotH} Z`;
   const targetY = padT + plotH - ((pacing.targetRuntimeSec || 0) / maxCum) * plotH;
+  const axisLabels = parts.map((p, i) => {
+    const xMid = padL + ((i + 0.5) / n) * plotW;
+    return { xMid, text: shortBeatLabel(p.label) };
+  });
 
   const el = sheet();
   el.className = 'sheet';
@@ -606,7 +686,7 @@ function renderPace() {
       <div class="kpis">
         <div class="kpi"><label>Planned</label><div class="val mono">${fmt(pacing.totalPlannedSec)}<span class="u">m</span></div><div class="delta">vs ${fmt(b.board.targetRuntimeSec)} target</div></div>
         <div class="kpi"><label>Headroom</label><div class="val mono">${fmt(Math.abs(headroom))}<span class="u">m</span></div><div class="delta ${headroom >= 0 ? 'ok' : 'bad'}">${headroom >= 0 ? 'under target' : 'over target'}</div></div>
-        <div class="kpi"><label>Slow stretches</label><div class="val mono">${slow.length}</div><div class="delta ${slow.length ? 'bad' : 'ok'}">${slow.length ? escapeHtml(slow.map((s) => s.label).join(' + ')) : 'none'}</div></div>
+        <div class="kpi"><label>Slow stretches</label><div class="val mono">${slow.length}</div><div class="delta ${slow.length ? 'slow' : 'ok'}">${slow.length ? escapeHtml(slow.map((s) => s.label).join(' + ')) : 'none'}</div></div>
         <div class="kpi"><label>Hours logged</label><div class="val mono">${hoursOn ? hoursTotal.toFixed(1) : '—'}${hoursOn ? `<span class="u">/ ${cap}</span>` : ''}</div><div class="delta">${hours?.activityWatch?.ok ? 'Resolve + OBS' : 'off · + log hours'}</div></div>
       </div>
       <div class="grid2">
@@ -619,29 +699,34 @@ function renderPace() {
               <span><i class="dot" style="background:var(--text);width:12px;height:1px;border-radius:0;vertical-align:middle;display:inline-block"></i>Target ${fmt(b.board.targetRuntimeSec)}</span>
               <span><i class="dot" style="background:var(--chart-3)"></i>Over part target</span>
             </div>
-            <svg viewBox="0 0 ${chartW} ${chartH}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:180px;display:block">
+            <svg viewBox="0 0 ${chartW} ${chartH}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:200px;display:block">
               <line x1="${padL}" y1="${padT}" x2="${chartW - padR}" y2="${padT}" stroke="var(--grid)"/>
               <line x1="${padL}" y1="${padT + plotH / 3}" x2="${chartW - padR}" y2="${padT + plotH / 3}" stroke="var(--grid)"/>
               <line x1="${padL}" y1="${padT + 2 * plotH / 3}" x2="${chartW - padR}" y2="${padT + 2 * plotH / 3}" stroke="var(--grid)"/>
               <line x1="${padL}" y1="${padT + plotH}" x2="${chartW - padR}" y2="${padT + plotH}" stroke="var(--grid)"/>
+              ${axisLabels.map((_, i) => {
+                const x = padL + ((i + 1) / n) * plotW;
+                return i < n - 1 ? `<line x1="${x}" y1="${padT}" x2="${x}" y2="${padT + plotH}" stroke="var(--grid)" stroke-dasharray="2 4" opacity="0.7"/>` : '';
+              }).join('')}
               <line x1="${padL}" y1="${targetY}" x2="${chartW - padR}" y2="${targetY}" stroke="var(--text)" stroke-dasharray="4 4"/>
               <path d="${area}" fill="var(--chart-1)" opacity="0.08"/>
               <polyline points="${poly}" fill="none" stroke="var(--chart-1)" stroke-width="2"/>
               ${pts.filter((p) => p.slow).map((p) => {
+                // Anchor annotation toward segment center so it reads with its beat
+                const labelX = Math.min(chartW - padR - 36, Math.max(padL, (p.xMid + p.x) / 2 - 12));
                 const above = p.y >= padT + 26;
-                const labelY = above ? p.y - 22 : p.y + 22;
-                const labelX = Math.min(chartW - padR - 40, Math.max(padL, p.x - 4));
+                const labelY = above ? p.y - 18 : p.y + 20;
                 return `
-                <circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--chart-3)"/>
-                <rect x="${labelX - 4}" y="${labelY - 11}" width="40" height="14" rx="2" fill="#ffffff" stroke="var(--border)" stroke-width="0.75"/>
+                <circle cx="${p.x}" cy="${p.y}" r="4.5" fill="var(--chart-3)" stroke="#fff" stroke-width="1"/>
+                <rect x="${labelX - 3}" y="${labelY - 10}" width="40" height="13" rx="2" fill="#ffffff" stroke="var(--border)" stroke-width="0.75"/>
                 <text x="${labelX}" y="${labelY}" font-size="10" fill="var(--warning)" font-family="IBM Plex Mono, monospace">${fmtSigned(p.overBy)}</text>`;
               }).join('')}
+              ${axisLabels.map((a) => `
+                <text x="${a.xMid}" y="${chartH - 10}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Sans, sans-serif">${escapeHtml(a.text)}</text>
+              `).join('')}
             </svg>
-            <div class="plan-labels" style="font-size:11px;color:var(--muted)">
-              ${parts.map((p) => `<span>${escapeHtml((p.label || '').split(' ')[0] || '·')}</span>`).join('')}
-            </div>
           </div>
-          <div style="border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:16px">
+          <div class="hours-gap" style="border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:24px">
             <h3 style="font-size:14px;font-weight:500;margin-bottom:4px">Hours against cap</h3>
             <p class="muted" style="font-size:12px;margin-bottom:12px">Read-only from ActivityWatch (Resolve, OBS) or hand-logged. Cap ${cap} h for this board.</p>
             ${hoursOn ? `
