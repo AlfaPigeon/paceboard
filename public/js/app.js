@@ -496,7 +496,8 @@ function renderMiniCurve() {
   const max = Math.max(...parts.map((p) => p.plannedSec || p.duration || 1), 1);
   return parts.map((p) => {
     const dur = p.plannedSec ?? p.duration ?? 0;
-    const h = Math.max(12, Math.round((dur / max) * 100));
+    // Cap tallest bar at ~70% of row height so bars clear the panel bottom padding
+    const h = Math.max(10, Math.round((dur / max) * 70));
     const slow = p.slow || (p.targetSec != null && dur > p.targetSec);
     return `<b class="${slow ? 'slow' : ''}" style="height:${h}%"></b>`;
   }).join('');
@@ -646,7 +647,7 @@ function renderPace() {
   const hoursOn = hoursTotal > 0 || hours?.activityWatch?.ok;
 
   const maxCum = Math.max(pacing.targetRuntimeSec || 1, pacing.totalPlannedSec || 1, 1);
-  const chartW = 640; const chartH = 200; const padL = 40; const padR = 28; const padT = 28; const padB = 36;
+  const chartW = 640; const chartH = 228; const padL = 40; const padR = 28; const padT = 48; const padB = 36;
   const plotW = chartW - padL - padR;
   const plotH = chartH - padT - padB;
   const n = Math.max(parts.length, 1);
@@ -664,9 +665,10 @@ function renderPace() {
   const poly = [`${padL},${padT + plotH}`, ...pts.map((p) => `${p.x},${p.y}`)].join(' ');
   const area = `M${padL},${padT + plotH} ` + pts.map((p) => `L${p.x},${p.y}`).join(' ') + ` L${pts[pts.length - 1].x},${padT + plotH} Z`;
   const targetY = padT + plotH - ((pacing.targetRuntimeSec || 0) / maxCum) * plotH;
+  // Label under each beat's END tick so it aligns with the cumulative point/dot
   const axisLabels = parts.map((p, i) => {
-    const xMid = padL + ((i + 0.5) / n) * plotW;
-    return { xMid, text: shortBeatLabel(p.label) };
+    const xEnd = padL + ((i + 1) / n) * plotW;
+    return { x: xEnd, text: shortBeatLabel(p.label), i };
   });
 
   const el = sheet();
@@ -699,7 +701,7 @@ function renderPace() {
               <span><i class="dot" style="background:var(--text);width:12px;height:1px;border-radius:0;vertical-align:middle;display:inline-block"></i>Target ${fmt(b.board.targetRuntimeSec)}</span>
               <span><i class="dot" style="background:var(--chart-3)"></i>Over part target</span>
             </div>
-            <svg viewBox="0 0 ${chartW} ${chartH}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:200px;display:block">
+            <svg viewBox="0 0 ${chartW} ${chartH}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:228px;display:block">
               <line x1="${padL}" y1="${padT}" x2="${chartW - padR}" y2="${padT}" stroke="var(--grid)"/>
               <line x1="${padL}" y1="${padT + plotH / 3}" x2="${chartW - padR}" y2="${padT + plotH / 3}" stroke="var(--grid)"/>
               <line x1="${padL}" y1="${padT + 2 * plotH / 3}" x2="${chartW - padR}" y2="${padT + 2 * plotH / 3}" stroke="var(--grid)"/>
@@ -712,18 +714,33 @@ function renderPace() {
               <path d="${area}" fill="var(--chart-1)" opacity="0.08"/>
               <polyline points="${poly}" fill="none" stroke="var(--chart-1)" stroke-width="2"/>
               ${pts.filter((p) => p.slow).map((p) => {
-                // Anchor annotation toward segment center so it reads with its beat
-                const labelX = Math.min(chartW - padR - 36, Math.max(padL, (p.xMid + p.x) / 2 - 12));
-                const above = p.y >= padT + 26;
-                const labelY = above ? p.y - 18 : p.y + 20;
+                // Always up-and-left of the dot — never intersect the curve or the target line
+                const tagW = 42;
+                const tagH = 13;
+                let labelX = p.x - tagW - 10;
+                let labelY = p.y - 20;
+                if (labelX < 4) labelX = Math.min(p.x + 12, chartW - padR - tagW);
+                // Keep the whole tag (labelY-10 .. labelY-10+tagH) clear above the target line when near it
+                const tagTop = () => labelY - 10;
+                const tagBot = () => labelY - 10 + tagH;
+                if (tagBot() >= targetY - 2 && tagTop() <= targetY + 2) {
+                  // Prefer above the target line
+                  labelY = targetY - 6;
+                }
+                if (tagTop() < 3) labelY = 3 + 10;
+                // Ensure still above the vertex
+                if (labelY > p.y - 14) labelY = Math.min(targetY - 6, p.y - 20);
+                if (labelY - 10 < 3) labelY = 13;
                 return `
                 <circle cx="${p.x}" cy="${p.y}" r="4.5" fill="var(--chart-3)" stroke="#fff" stroke-width="1"/>
-                <rect x="${labelX - 3}" y="${labelY - 10}" width="40" height="13" rx="2" fill="#ffffff" stroke="var(--border)" stroke-width="0.75"/>
+                <rect x="${labelX - 3}" y="${labelY - 10}" width="${tagW}" height="${tagH}" rx="2" fill="#ffffff" stroke="var(--border)" stroke-width="0.75"/>
                 <text x="${labelX}" y="${labelY}" font-size="10" fill="var(--warning)" font-family="IBM Plex Mono, monospace">${fmtSigned(p.overBy)}</text>`;
               }).join('')}
-              ${axisLabels.map((a) => `
-                <text x="${a.xMid}" y="${chartH - 10}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Sans, sans-serif">${escapeHtml(a.text)}</text>
-              `).join('')}
+              ${axisLabels.map((a) => {
+                const anchor = a.i === n - 1 ? 'end' : 'middle';
+                const x = a.i === n - 1 ? a.x : a.x;
+                return `<text x="${x}" y="${chartH - 10}" text-anchor="${anchor}" font-size="11" fill="var(--muted)" font-family="IBM Plex Sans, sans-serif">${escapeHtml(a.text)}</text>`;
+              }).join('')}
             </svg>
           </div>
           <div class="hours-gap" style="border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:24px">
