@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Board — Storyboard</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="toolbar">
+      <a href="/" class="ghost" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px">←</a>
+      <input class="title-input" id="board-title" />
+      <span class="pill" id="board-status">idea</span>
+      <span class="grow"></span>
+      <span class="row muted" style="font-size:13px" id="save-state"><span class="status-dot" id="save-dot"></span> Saved</span>
+      <button id="btn-export-md">Export MD</button>
+      <button id="btn-export-json">Export JSON</button>
+      <button id="btn-media">Local video</button>
+      <button id="btn-push-notion">Push Notion</button>
+    </header>
+
+    <div class="workspace">
+      <aside class="rail" title="Add cards">
+        <button data-add="beat" title="Beat">Beat</button>
+        <button data-add="note" title="Note">Note</button>
+        <button data-add="clip" title="Clip">Clip</button>
+        <button data-add="reference" title="Ref">Ref</button>
+        <button data-add="audience" title="Audience">Aud</button>
+        <button id="btn-add-group" title="Section">Sec</button>
+        <button id="btn-wire-mode" title="Wire mode">Wire</button>
+      </aside>
+
+      <div class="canvas-wrap" id="canvas-wrap">
+        <svg class="wires" id="wires"></svg>
+        <div class="canvas-world" id="world"></div>
+      </div>
+
+      <aside class="side">
+        <section>
+          <h2>Audience fit</h2>
+          <div class="field"><label>Who</label><input id="aud-who" /></div>
+          <div class="field"><label>Already know</label><textarea id="aud-know" rows="2"></textarea></div>
+          <div class="field"><label>Promise / hook</label><textarea id="aud-promise" rows="2"></textarea></div>
+          <div class="field"><label>Persona</label><input id="aud-persona" /></div>
+          <p class="dim" id="orphan-beats"></p>
+        </section>
+        <section>
+          <h2>Work hours</h2>
+          <div class="field"><label>Cap (hours)</label><input id="hours-cap" type="number" min="0" step="0.5" /></div>
+          <div class="field"><label>AW title keyword</label><input id="hours-filter" placeholder="optional filter" /></div>
+          <div class="field"><label>AW start date</label><input id="hours-start" type="date" /></div>
+          <div id="hours-summary" class="muted" style="font-size:13px"></div>
+          <div class="row" style="margin-top:8px">
+            <input id="hours-manual" type="number" step="0.25" placeholder="+ hours" style="width:100px" />
+            <button id="btn-add-hours">Add</button>
+            <button id="btn-refresh-hours" class="ghost">Refresh</button>
+          </div>
+        </section>
+        <section>
+          <h2>Selected</h2>
+          <div id="selection-panel" class="dim">Select a card</div>
+        </section>
+      </aside>
+    </div>
+
+    <footer class="timeline">
+      <div class="timeline-meta col">
+        <label>Target runtime (sec)</label>
+        <input id="target-runtime" type="number" min="30" step="5" />
+        <div class="pace-bar"><span id="pace-fill" style="width:0%"></span></div>
+        <div class="muted" id="pace-label" style="font-size:12px"></div>
+        <button id="btn-add-beat">+ Beat to timeline</button>
+      </div>
+      <div class="timeline-lane-wrap">
+        <div class="timeline-lane" id="timeline-lane"></div>
+      </div>
+      <div class="timeline-flags" id="timeline-flags"></div>
+    </footer>
+  </div>
+
+  <div id="media-modal" class="modal-backdrop">
+    <div class="modal col">
+      <h2>Local video</h2>
+      <div class="row">
+        <button id="browse-up">↑ Parent</button>
+        <input id="browse-path" class="grow" />
+        <button id="browse-go">Go</button>
+      </div>
+      <div class="file-list" id="file-list"></div>
+      <div class="row">
+        <label class="row" style="gap:8px"><span>Or upload</span><input id="file-upload" type="file" accept="video/*,.mkv,.mov" style="width:auto" /></label>
+        <span class="grow"></span>
+        <button id="media-close" class="ghost">Close</button>
+      </div>
+      <pre id="media-job" class="dim" style="font-family:var(--font-mono);font-size:12px"></pre>
+    </div>
+  </div>
+
+  <script type="module" src="/js/board-app.js"></script>
+</body>
+</html>

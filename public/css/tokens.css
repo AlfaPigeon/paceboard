@@ -1,0 +1,35 @@
+:root {
+  --bg: #0f1115;
+  --bg-elevated: #171a21;
+  --bg-soft: #1e2330;
+  --panel: #151922;
+  --border: #2a3140;
+  --border-strong: #3d465a;
+  --text: #e8edf7;
+  --text-muted: #9aa6bd;
+  --text-dim: #6b7690;
+  --accent: #7c9cff;
+  --accent-2: #f2b544;
+  --danger: #f07178;
+  --ok: #7fd99a;
+  --warn: #e6c07b;
+  --card-beat: #243056;
+  --card-note: #2a2f3d;
+  --card-clip: #1f3a34;
+  --card-ref: #3a2f1f;
+  --card-audience: #3a2438;
+  --wire: #7c9cff;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --toolbar-h: 56px;
+  --timeline-h: 180px;
+}

@@ -1,0 +1,13 @@
+[Unit]
+Description=Storyboard local video ideation app
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/src/storyboard
+Environment=STORYBOARD_PORT=3200
+ExecStart=/usr/bin/node %h/src/storyboard/src/server.js
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

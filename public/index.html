@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Storyboard — ideas</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <main class="home">
+    <div class="row wrap" style="justify-content:space-between;align-items:flex-end">
+      <div>
+        <h1>Storyboard</h1>
+        <p class="muted">Plan YouTube videos on a canvas. Sync ideas from Notion, drop in local footage, pace the cut.</p>
+      </div>
+      <div class="row">
+        <button id="btn-settings" class="ghost">Settings</button>
+        <button id="btn-import-notion">Import Notion</button>
+        <button id="btn-new" class="primary">New board</button>
+      </div>
+    </div>
+    <div id="boards" class="grid"></div>
+  </main>
+
+  <div id="settings-modal" class="modal-backdrop">
+    <div class="modal col">
+      <h2>Settings</h2>
+      <div class="field">
+        <label>Notion internal integration token</label>
+        <input id="set-token" type="password" placeholder="secret_…" autocomplete="off" />
+        <p class="dim" id="token-state"></p>
+      </div>
+      <div class="field">
+        <label>Notion database ID</label>
+        <input id="set-db" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+      </div>
+      <div class="field">
+        <label>Default work-hours cap</label>
+        <input id="set-cap" type="number" min="1" step="1" />
+      </div>
+      <div class="field">
+        <label class="row"><input id="set-aw" type="checkbox" style="width:auto" /> Enable ActivityWatch (read-only)</label>
+      </div>
+      <div class="field">
+        <label>ActivityWatch URL</label>
+        <input id="set-aw-url" />
+      </div>
+      <div class="field">
+        <label>App name matches (comma-separated)</label>
+        <input id="set-aw-apps" />
+      </div>
+      <div class="row">
+        <button id="btn-save-settings" class="primary">Save</button>
+        <button id="btn-close-settings" class="ghost">Close</button>
+        <button id="btn-fetch-schema">Fetch schema / suggest mapping</button>
+      </div>
+      <pre id="schema-out" class="dim" style="white-space:pre-wrap;font-family:var(--font-mono);font-size:12px"></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    import { api } from '/js/api.js';
+
+    const boardsEl = document.getElementById('boards');
+    async function refresh() {
+      const { boards } = await api('/api/boards');
+      boardsEl.innerHTML = '';
+      if (!boards.length) {
+        boardsEl.innerHTML = '<p class="muted">No boards yet. Create one or import from Notion.</p>';
+        return;
+      }
+      for (const b of boards) {
+        const el = document.createElement('article');
+        el.className = 'board-card';
+        el.innerHTML = `<h3></h3><div class="row wrap"><span class="pill"></span><span class="dim" style="font-size:12px"></span></div>`;
+        el.querySelector('h3').textContent = b.title;
+        el.querySelector('.pill').textContent = b.status || 'idea';
+        el.querySelector('.dim').textContent = new Date(b.updatedAt).toLocaleString();
+        el.onclick = () => { location.href = `/board?id=${encodeURIComponent(b.id)}`; };
+        boardsEl.appendChild(el);
+      }
+    }
+
+    document.getElementById('btn-new').onclick = async () => {
+      const title = prompt('Video title', 'Untitled video');
+      if (title == null) return;
+      const bundle = await api('/api/boards', { method: 'POST', body: { title } });
+      location.href = `/board?id=${encodeURIComponent(bundle.board.id)}`;
+    };
+
+    document.getElementById('btn-import-notion').onclick = async () => {
+      try {
+        const res = await api('/api/notion/import', { method: 'POST', body: { createBoards: true } });
+        alert(`Imported ${res.count} ideas (${res.created.length} boards upserted).`);
+        refresh();
+      } catch (e) {
+        alert(e.message);
+      }
+    };
+
+    const modal = document.getElementById('settings-modal');
+    document.getElementById('btn-settings').onclick = async () => {
+      const s = await api('/api/settings');
+      document.getElementById('set-token').value = '';
+      document.getElementById('token-state').textContent = s.notion.tokenSet ? `Token set (${s.notion.token})` : 'No token saved';
+      document.getElementById('set-db').value = s.notion.databaseId || '';
+      document.getElementById('set-cap').value = s.hours.defaultCapHours;
+      document.getElementById('set-aw').checked = !!s.hours.activityWatch.enabled;
+      document.getElementById('set-aw-url').value = s.hours.activityWatch.baseUrl;
+      document.getElementById('set-aw-apps').value = (s.hours.activityWatch.apps || []).join(', ');
+      modal.classList.add('open');
+    };
+    document.getElementById('btn-close-settings').onclick = () => modal.classList.remove('open');
+    document.getElementById('btn-save-settings').onclick = async () => {
+      const body = {
+        notion: {
+          databaseId: document.getElementById('set-db').value.trim(),
+        },
+        hours: {
+          defaultCapHours: Number(document.getElementById('set-cap').value || 30),
+          activityWatch: {
+            enabled: document.getElementById('set-aw').checked,
+            baseUrl: document.getElementById('set-aw-url').value.trim(),
+            apps: document.getElementById('set-aw-apps').value.split(',').map((s) => s.trim()).filter(Boolean),
+          },
+        },
+      };
+      const token = document.getElementById('set-token').value.trim();
+      if (token) body.notion.token = token;
+      await api('/api/settings', { method: 'PUT', body });
+      modal.classList.remove('open');
+      alert('Saved');
+    };
+    document.getElementById('btn-fetch-schema').onclick = async () => {
+      try {
+        const db = document.getElementById('set-db').value.trim();
+        const schema = await api('/api/notion/schema' + (db ? `?databaseId=${encodeURIComponent(db)}` : ''));
+        document.getElementById('schema-out').textContent = JSON.stringify({
+          title: schema.title,
+          properties: schema.properties,
+          suggestedMapping: schema.suggestedMapping,
+        }, null, 2);
+        if (schema.suggestedMapping) {
+          await api('/api/notion/mapping', {
+            method: 'POST',
+            body: { databaseId: db || undefined, mapping: schema.suggestedMapping },
+          });
+        }
+      } catch (e) {
+        document.getElementById('schema-out').textContent = e.message;
+      }
+    };
+
+    refresh().catch((e) => { boardsEl.textContent = e.message; });
+  </script>
+</body>
+</html>
