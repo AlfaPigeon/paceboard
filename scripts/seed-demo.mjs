@@ -67,19 +67,17 @@ async function forceBuildingClip(_boardId, mediaRows) {
   if (!pick) return;
   const dataDir = process.env.PACEBOARD_DATA || path.join(ROOT, 'data');
   const dbPath = process.env.PACEBOARD_DB || path.join(dataDir, 'paceboard.sqlite');
-  const tmp = path.join(MEDIA_DIR, '_force-building.cjs');
-  const body = [
-    "const Database = require('better-sqlite3');",
-    `const db = new Database(${JSON.stringify(dbPath)});`,
-    "db.prepare(\"UPDATE media_assets SET status='proxy', progress=0.42, updated_at=? WHERE id=?\")"
-      + `.run(new Date().toISOString(), ${JSON.stringify(pick.id)});`,
-    'db.close();',
-    `console.log('forced building', ${JSON.stringify(pick.id)});`,
-    '',
-  ].join('\n');
+  const tmp = path.join(MEDIA_DIR, '_force-building.mjs');
+  const body = `import { DatabaseSync } from 'node:sqlite';
+const db = new DatabaseSync(${JSON.stringify(dbPath)});
+db.prepare("UPDATE media_assets SET status='proxy', progress=0.42, updated_at=? WHERE id=?")
+  .run(new Date().toISOString(), ${JSON.stringify(pick.id)});
+db.close();
+console.log('forced building', ${JSON.stringify(pick.id)});
+`;
   fs.writeFileSync(tmp, body);
   const r = spawnSync(process.execPath, [tmp], { encoding: 'utf8', cwd: ROOT });
-  try { fs.unlinkSync(tmp); } catch {}
+  try { fs.unlinkSync(tmp); } catch { /* ignore */ }
   if (r.status !== 0) console.warn('forceBuildingClip failed', r.stderr || r.stdout);
   else console.log(String(r.stdout || '').trim());
 }

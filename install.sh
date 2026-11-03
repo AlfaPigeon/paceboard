@@ -64,14 +64,24 @@ if [[ "$MISSING" -eq 1 ]]; then
   exit 1
 fi
 
-NODE_MAJOR="$(node -p "process.versions.node.split('.')[0]")"
-if [[ "$NODE_MAJOR" -lt 20 ]]; then
-  echo "Node 20+ required (found $(node -v))"
+# node:sqlite (DatabaseSync) is unflagged on 22.13+ / 23.4+ — no native addon rebuild.
+NODE_VER="$(node -p "process.versions.node")"
+NODE_OK="$(node -p "const [M,m]=process.versions.node.split('.').map(Number); (M>22 || (M===22 && m>=13) || (M===23 && m>=4) || M>=24) ? '1' : '0'")"
+if [[ "$NODE_OK" != "1" ]]; then
+  echo "Paceboard needs Node.js 22.13+ (or 23.4+ / 24+)."
+  echo "  Found: v$NODE_VER"
+  echo "  Why:   uses built-in node:sqlite (no better-sqlite3 / node-gyp)."
+  echo "  Arch:  sudo pacman -S --needed nodejs npm   # keep current; or install from nodejs.org"
   exit 1
 fi
 
-echo "==> npm install"
-npm install --omit=dev
+echo "==> npm dependencies (omit dev)"
+if [[ -f package-lock.json ]]; then
+  npm ci --omit=dev
+else
+  echo "    (no package-lock.json — falling back to npm install --omit=dev)"
+  npm install --omit=dev
+fi
 
 mkdir -p "$DATA_HOME"/{media,uploads,cache}
 mkdir -p "$HOME/.config/systemd/user"
@@ -129,7 +139,11 @@ rm -f "$HOME/.config/systemd/user/storyboard.service" \
       "$HOME/.local/bin/storyboard" 2>/dev/null || true
 
 systemctl --user daemon-reload 2>/dev/null || true
-systemctl --user enable --now "$UNIT_NAME" 2>/dev/null || true
+if systemctl --user enable --now "$UNIT_NAME" 2>/dev/null; then
+  systemctl --user restart "$UNIT_NAME" 2>/dev/null || true
+else
+  echo "    (systemd --user unavailable here — start with: npm start  or  ~/.local/bin/paceboard)"
+fi
 
 echo
 echo "Installed."

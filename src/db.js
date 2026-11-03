@@ -1,11 +1,67 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { DB_PATH } from './config.js';
 
 let db;
 
+/**
+ * Built-in node:sqlite (DatabaseSync). No native addons.
+ * Requires Node 22.13+ / 23.4+ (unflagged). On 22.13–25.6 the runtime may
+ * emit ExperimentalWarning once; we swallow that specific warning.
+ */
+function suppressSqliteExperimentalWarning() {
+  if (globalThis.__paceboardSqliteWarnPatched) return;
+  globalThis.__paceboardSqliteWarnPatched = true;
+  const prev = process.emitWarning;
+  process.emitWarning = function paceboardEmitWarning(warning, ...args) {
+    const msg = typeof warning === 'string' ? warning : (warning?.message || '');
+    const kind = typeof warning === 'object' && warning?.name
+      ? warning.name
+      : (typeof args[0] === 'string' ? args[0] : '');
+    if (kind === 'ExperimentalWarning' && /sqlite/i.test(msg)) return;
+    return prev.call(process, warning, ...args);
+  };
+}
+
+function wrapDatabase(raw) {
+  // better-sqlite3-compatible helpers used across the app.
+  raw.pragma = function pragma(src) {
+    const sql = String(src).trim().replace(/;+\s*$/, '');
+    // Prefer SELECT for read-backs; exec for assignments.
+    if (/=/.test(sql)) {
+      raw.exec(`PRAGMA ${sql};`);
+      return undefined;
+    }
+    try {
+      return raw.prepare(`PRAGMA ${sql}`).all();
+    } catch {
+      raw.exec(`PRAGMA ${sql};`);
+      return undefined;
+    }
+  };
+
+  raw.transaction = function transaction(fn) {
+    const run = (...args) => {
+      raw.exec('BEGIN');
+      try {
+        const result = fn(...args);
+        raw.exec('COMMIT');
+        return result;
+      } catch (err) {
+        try { raw.exec('ROLLBACK'); } catch { /* ignore */ }
+        throw err;
+      }
+    };
+    return run;
+  };
+
+  return raw;
+}
+
 export function getDb() {
   if (db) return db;
-  db = new Database(DB_PATH);
+  suppressSqliteExperimentalWarning();
+  const raw = new DatabaseSync(DB_PATH);
+  db = wrapDatabase(raw);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   migrate(db);

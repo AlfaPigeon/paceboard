@@ -28,7 +28,7 @@ Non-personal demo board (local seed data only — not shipped as product default
 
 ## Requirements (Arch)
 
-- Node.js 20+
+- Node.js **22.13+** (or 23.4+ / 24+; uses built-in `node:sqlite`, no native addons)
 - npm
 - ffmpeg (provides `ffmpeg` and `ffprobe`)
 - git (for clone / one-line install)
@@ -36,6 +36,8 @@ Non-personal demo board (local seed data only — not shipped as product default
 ```bash
 sudo pacman -S --needed nodejs npm ffmpeg git
 ```
+
+Paceboard stores boards in SQLite via Node's built-in [`node:sqlite`](https://nodejs.org/api/sqlite.html) (`DatabaseSync`). There is **no** `better-sqlite3` / node-gyp build step. On Node 22.13–25.6 you may see a one-time `ExperimentalWarning` for the sqlite module; it is harmless and suppressed by the app. Node 25.7+ / 26 treat it as a release candidate (no warning).
 
 ## Install
 
@@ -51,7 +53,7 @@ Or clone and install yourself:
 git clone https://github.com/AlfaPigeon/paceboard.git && cd paceboard && ./install.sh
 ```
 
-`install.sh` installs npm deps, a `systemd --user` service (`paceboard.service`), a `~/.local/bin/paceboard` wrapper, and a `.desktop` launcher that opens `http://127.0.0.1:3200/`.
+`install.sh` is idempotent: it updates the clone (`git pull --ff-only` when installed via the one-liner), runs `npm ci --omit=dev`, (re)writes the `systemd --user` unit (`paceboard.service`) and restarts it, refreshes `~/.local/bin/paceboard`, and the `.desktop` launcher that opens `http://127.0.0.1:3200/`.
 
 - Default port **3200** (override with `PACEBOARD_PORT`)
 - Runtime data / secrets: `~/.local/share/paceboard` (override with `PACEBOARD_DATA`); a local `./data/` folder is also used when you run from source without the env var
