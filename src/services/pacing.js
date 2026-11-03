@@ -1,27 +1,58 @@
 /** Explainable pacing rules for a board timeline. */
 
 export function analyzePacing({ beats = [], targetRuntimeSec = 600, hookWindowSec = 15 } = {}) {
-  const ordered = [...beats].sort((a, b) => a.ord - b.ord);
+  const ordered = [...beats].sort((a, b) => (a.ord ?? 0) - (b.ord ?? 0));
   const totalPlanned = ordered.reduce((s, b) => s + Number(b.plannedSec || 0), 0);
   const avg = ordered.length ? totalPlanned / ordered.length : 0;
   const flags = [];
   const curve = [];
+  const parts = [];
   let t = 0;
+  let cumTarget = 0;
+  let slowCount = 0;
 
   for (const beat of ordered) {
     const dur = Number(beat.plannedSec || 0);
+    const targetSec = Number(beat.data?.targetSec ?? beat.targetSec ?? 0) || null;
     const start = t;
     const end = t + dur;
+    const overBy = targetSec != null && dur > targetSec ? dur - targetSec : 0;
+    if (overBy > 0) slowCount += 1;
+
     curve.push({
       id: beat.id,
       label: beat.label,
       start,
       end,
       duration: dur,
+      targetSec,
+      overBy,
+      cumPlanned: end,
       ratioToAvg: avg ? dur / avg : 1,
+      slow: overBy > 0,
     });
 
-    if (avg && dur > avg * 1.8) {
+    parts.push({
+      id: beat.id,
+      label: beat.label,
+      plannedSec: dur,
+      targetSec,
+      overBy,
+      slow: overBy > 0,
+      servesPromise: beat.servesPromise !== false,
+      fit: beat.data?.fit || (beat.servesPromise === false ? 'weak' : 'ok'),
+    });
+
+    if (targetSec != null && overBy > 0) {
+      flags.push({
+        code: 'over_part_target',
+        severity: 'warn',
+        beatId: beat.id,
+        message: `"${beat.label || 'Beat'}" is ${fmt(dur)} vs part target ${fmt(targetSec)} (+${fmt(overBy)}).`,
+      });
+    }
+
+    if (avg && dur > avg * 1.8 && !(targetSec != null)) {
       flags.push({
         code: 'slow_beat',
         severity: 'warn',
@@ -29,12 +60,13 @@ export function analyzePacing({ beats = [], targetRuntimeSec = 600, hookWindowSe
         message: `"${beat.label || 'Beat'}" is ${dur.toFixed(0)}s (${(dur / avg).toFixed(1)}× average). Consider splitting.`,
       });
     }
-    if (avg && dur > 0 && dur < avg * 0.35 && dur < 8) {
+
+    if (!beat.servesPromise) {
       flags.push({
-        code: 'rushed_beat',
-        severity: 'info',
+        code: 'orphan_promise',
+        severity: 'warn',
         beatId: beat.id,
-        message: `"${beat.label || 'Beat'}" is only ${dur.toFixed(0)}s — may feel rushed.`,
+        message: `"${beat.label || 'Beat'}" does not serve the audience promise.`,
       });
     }
 
@@ -48,15 +80,16 @@ export function analyzePacing({ beats = [], targetRuntimeSec = 600, hookWindowSe
       });
     }
 
-    if (!beat.servesPromise) {
+    if (avg && dur > 0 && dur < avg * 0.35 && dur < 8) {
       flags.push({
-        code: 'orphan_promise',
-        severity: 'warn',
+        code: 'rushed_beat',
+        severity: 'info',
         beatId: beat.id,
-        message: `"${beat.label || 'Beat'}" does not serve the audience promise.`,
+        message: `"${beat.label || 'Beat'}" is only ${dur.toFixed(0)}s — may feel rushed.`,
       });
     }
 
+    if (targetSec != null) cumTarget += targetSec;
     t = end;
   }
 
@@ -91,15 +124,24 @@ export function analyzePacing({ beats = [], targetRuntimeSec = 600, hookWindowSe
   return {
     totalPlannedSec: totalPlanned,
     targetRuntimeSec: Number(targetRuntimeSec || 0),
+    headroomSec: Number(targetRuntimeSec || 0) - totalPlanned,
     averageBeatSec: avg,
+    slowStretches: slowCount,
     curve,
+    parts,
     flags,
   };
 }
 
-function fmt(sec) {
-  const s = Math.round(Number(sec) || 0);
+export function fmt(sec) {
+  const s = Math.max(0, Math.round(Number(sec) || 0));
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+export function fmtSigned(sec) {
+  const n = Math.round(Number(sec) || 0);
+  const sign = n > 0 ? '+' : n < 0 ? '−' : '';
+  return `${sign}${fmt(Math.abs(n))}`;
 }

@@ -1,7 +1,7 @@
 {
-  "name": "storyboard",
+  "name": "cutline",
   "version": "0.1.0",
-  "description": "Local storyboard and ideation tool for planning YouTube videos",
+  "description": "Cutline — local storyboard and ideation tool for planning YouTube videos",
   "main": "src/server.js",
   "directories": {
     "test": "test"

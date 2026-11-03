@@ -20,7 +20,7 @@ getDb();
 loadSettings();
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, name: 'storyboard', port: Number(process.env.STORYBOARD_PORT || DEFAULT_PORT) });
+  res.json({ ok: true, name: 'cutline', port: Number(process.env.STORYBOARD_PORT || DEFAULT_PORT) });
 });
 
 app.use('/api/boards', boards);
@@ -42,14 +42,15 @@ app.post('/api/jobs/:id/cancel', (req, res) => {
   res.json(job);
 });
 
-app.get('/board', (_req, res) => {
-  res.sendFile(path.join(ROOT, 'public', 'board.html'));
+// SPA: board deep links land on the framed-sheet app
+app.get(['/board', '/board.html'], (_req, res) => {
+  res.sendFile(path.join(ROOT, 'public', 'index.html'));
 });
 
 const port = Number(process.env.STORYBOARD_PORT || DEFAULT_PORT);
 if (process.env.STORYBOARD_NO_LISTEN !== '1') {
   app.listen(port, HOST, () => {
-    console.log(`Storyboard listening on http://${HOST}:${port}`);
+    console.log(`Cutline listening on http://${HOST}:${port}`);
   });
 }
 

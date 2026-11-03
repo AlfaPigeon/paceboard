@@ -1,10 +1,10 @@
-# Storyboard _(working title)_
+# Cutline _(working name, pending)_
 
-Local storyboard and ideation tool for planning YouTube videos.
+Cutline — local storyboard and ideation tool for planning YouTube videos.
 
 Infinite canvas for beats, notes, clips, references, and audience cards; Notion idea-pipeline sync; local MKV / ProRes / DNxHR proxying for browser playback; timeline pacing; work-hours budget (optional ActivityWatch); Markdown / JSON export.
 
-> Final product name and polished UI will land in a later design pass. Tokens live in `public/css/tokens.css` so restyling stays easy.
+> Working name **Cutline** (rename in `public/js/brand.js`). Framed-sheet UI; tokens in `public/css/tokens.css` (dark-mode ready, light-only in v1).
 
 ## Requirements (Arch)
 

@@ -46,11 +46,18 @@ r.post('/mapping', (req, res) => {
   const settings = loadSettings();
   const mapping = { ...settings.notion.mapping, ...(req.body?.mapping || {}) };
   const databaseId = req.body?.databaseId || settings.notion.databaseId;
+  const mappingConfirmed = req.body?.confirmed != null
+    ? !!req.body.confirmed
+    : (settings.notion.mappingConfirmed || false);
   const saved = saveSettings({
     ...settings,
-    notion: { ...settings.notion, mapping, databaseId },
+    notion: { ...settings.notion, mapping, databaseId, mappingConfirmed },
   });
-  res.json({ mapping: saved.notion.mapping, databaseId: saved.notion.databaseId });
+  res.json({
+    mapping: saved.notion.mapping,
+    databaseId: saved.notion.databaseId,
+    mappingConfirmed: saved.notion.mappingConfirmed,
+  });
 });
 
 r.post('/import', async (req, res) => {
@@ -172,5 +179,108 @@ r.post('/boards/:id/push', async (req, res) => {
     res.status(502).json({ error: err.message });
   }
 });
+
+r.post('/boards/:id/resolve', async (req, res) => {
+  try {
+    const settings = loadSettings();
+    const client = getClientFromSettings(settings);
+    if (!client) return res.status(400).json({ error: 'Notion token not configured' });
+    const bundle = loadBoardBundle(req.params.id);
+    if (!bundle) return res.status(404).json({ error: 'Board not found' });
+    const pageId = bundle.board.notionPageId || req.body?.notionPageId;
+    if (!pageId) return res.status(400).json({ error: 'Board is not linked to a Notion page' });
+
+    const action = req.body?.action; // keep_local | keep_notion | edit
+    const remote = await retrievePage(client, pageId);
+    const remoteIdea = pageToIdea(remote, settings.notion.mapping);
+    const db = getDb();
+
+    if (action === 'keep_notion') {
+      const audience = {
+        ...(bundle.board.audience || {}),
+        persona: remoteIdea.persona || bundle.board.audience?.persona || '',
+        promise: remoteIdea.leaveBehind || bundle.board.audience?.promise || '',
+      };
+      const meta = {
+        ...(bundle.board.meta || {}),
+        link: remoteIdea.link || bundle.board.meta?.link,
+        targetWeek: remoteIdea.targetWeek || bundle.board.meta?.targetWeek,
+      };
+      db.prepare(`
+        UPDATE boards SET title=?, status=?, audience_json=?, meta_json=?, notion_last_edited=?, updated_at=?
+        WHERE id=?
+      `).run(
+        remoteIdea.title || bundle.board.title,
+        remoteIdea.stage || bundle.board.status,
+        JSON.stringify(audience),
+        JSON.stringify(meta),
+        remote.last_edited_time,
+        nowIso(),
+        req.params.id,
+      );
+      return res.json({ ok: true, action, board: loadBoardBundle(req.params.id)?.board, remote: remoteIdea });
+    }
+
+    if (action === 'keep_local' || action === 'edit') {
+      const localFields = {
+        title: req.body?.title ?? bundle.board.title,
+        stage: req.body?.stage ?? bundle.board.status,
+        persona: req.body?.persona ?? bundle.board.audience?.persona,
+        leave_behind: req.body?.leave_behind ?? bundle.board.audience?.promise,
+        link: req.body?.link ?? bundle.board.meta?.link,
+        target_week: req.body?.target_week ?? bundle.board.meta?.targetWeek,
+      };
+      if (action === 'edit') {
+        db.prepare(`
+          UPDATE boards SET title=?, status=?, updated_at=? WHERE id=?
+        `).run(localFields.title, localFields.stage || bundle.board.status, nowIso(), req.params.id);
+      }
+      const schema = await getDatabaseSchema(client, settings.notion.databaseId || remote.parent?.database_id);
+      const properties = buildPropertyUpdates(localFields, settings.notion.mapping, schema.properties);
+      const updated = await updatePage(client, pageId, properties);
+      db.prepare(`
+        UPDATE boards SET notion_last_edited=?, title=?, status=?, updated_at=? WHERE id=?
+      `).run(updated.last_edited_time, localFields.title, localFields.stage || bundle.board.status, nowIso(), req.params.id);
+      return res.json({ ok: true, action, notionLastEdited: updated.last_edited_time });
+    }
+
+    return res.status(400).json({ error: 'action must be keep_local, keep_notion, or edit' });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+r.get('/boards/:id/conflict', async (req, res) => {
+  try {
+    const settings = loadSettings();
+    const client = getClientFromSettings(settings);
+    if (!client) return res.status(400).json({ error: 'Notion token not configured' });
+    const bundle = loadBoardBundle(req.params.id);
+    if (!bundle) return res.status(404).json({ error: 'Board not found' });
+    const pageId = bundle.board.notionPageId;
+    if (!pageId) return res.json({ conflict: false, linked: false });
+    const remote = await retrievePage(client, pageId);
+    const remoteIdea = pageToIdea(remote, settings.notion.mapping);
+    const localFields = {
+      title: bundle.board.title,
+      stage: bundle.board.status,
+      persona: bundle.board.audience?.persona,
+      leave_behind: bundle.board.audience?.promise,
+      link: bundle.board.meta?.link,
+      target_week: bundle.board.meta?.targetWeek,
+    };
+    const conflict = detectConflict({
+      localStamp: bundle.board.notionLastEdited,
+      remoteStamp: remote.last_edited_time,
+      localFields,
+      remoteIdea,
+      mapping: settings.notion.mapping,
+    });
+    res.json({ ...conflict, linked: true, local: localFields, remote: remoteIdea, localUpdatedAt: bundle.board.updatedAt, remoteStamp: remote.last_edited_time });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 
 export default r;

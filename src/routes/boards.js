@@ -172,8 +172,10 @@ r.put('/:id/canvas', (req, res) => {
     `);
     for (const w of wires) {
       if (!w.fromCardId || !w.toCardId) continue;
+      const wid = w.id || id('wire');
+      db.prepare('DELETE FROM wires WHERE id = ?').run(wid);
       insWire.run(
-        w.id || id('wire'), boardId, w.fromCardId, w.toCardId, w.kind || 'flow',
+        wid, boardId, w.fromCardId, w.toCardId, w.kind || 'flow',
         JSON.stringify(w.data || {}), ts,
       );
     }

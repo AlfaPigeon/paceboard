@@ -19,13 +19,15 @@ export const DEFAULT_SETTINGS = {
     token: '',
     databaseId: '',
     mapping: {
-      title: 'Video',
+      title: 'Video', // also Name/Title via suggestMapping
       stage: 'Stage',
       persona: 'Persona',
       leave_behind: 'Leave-behind',
       link: 'Link',
       target_week: 'Target week',
+      target_runtime: '',
     },
+    mappingConfirmed: false,
   },
   hours: {
     defaultCapHours: 30,
