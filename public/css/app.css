@@ -371,3 +371,62 @@ textarea.input { height: auto; padding: 8px 10px; resize: vertical; }
 
 .board-sheet.sheet { padding: 0; }
 .canvas-panel { min-height: 360px; }
+
+/* Notion reachability error (Designer: inline, Retry, collapsed raw API) */
+.notion-error {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--pill-warning-ink) 35%, transparent);
+  background: color-mix(in srgb, var(--pill-warning-ink) 10%, var(--panel, #fff));
+}
+.notion-error h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pill-warning-ink);
+  margin: 0 0 6px;
+}
+.notion-error p {
+  font-size: 12px;
+  color: var(--pill-warning-ink);
+  margin: 0;
+  line-height: 1.4;
+}
+.notion-error .btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.notion-error details {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.notion-error details summary {
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+}
+.notion-error details pre {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+  overflow: auto;
+  max-height: 180px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.notion-ds-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.notion-ds-choices button {
+  text-align: left;
+}

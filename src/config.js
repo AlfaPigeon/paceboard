@@ -18,6 +18,8 @@ export const DEFAULT_SETTINGS = {
   notion: {
     token: '',
     databaseId: '',
+    dataSourceId: '',
+    databaseTitle: '',
     mapping: {
       title: 'Video', // also Name/Title via suggestMapping
       stage: 'Stage',

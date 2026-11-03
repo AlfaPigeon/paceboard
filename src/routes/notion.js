@@ -5,11 +5,13 @@ import { id } from '../util.js';
 import {
   buildPropertyUpdates,
   detectConflict,
-  fetchDatabaseRows,
+  fetchDataSourceRows,
+  formatNotionError,
   getClientFromSettings,
-  getDatabaseSchema,
-  listDatabases,
+  getDataSourceSchema,
+  listDataSources,
   pageToIdea,
+  resolveToDataSources,
   retrievePage,
   updatePage,
 } from '../services/notion.js';
@@ -17,44 +19,101 @@ import { loadBoardBundle } from './boards.js';
 
 const r = Router();
 
+function sendNotionError(res, err, { label } = {}) {
+  const settings = loadSettings();
+  const friendlyLabel = label
+    || settings.notion?.databaseTitle
+    || (settings.notion?.dataSourceId && settings.notion?.mapping?.title)
+    || null;
+  // Prefer schema/database display name when we have one stored on the request path
+  const formatted = formatNotionError(err, {
+    label: friendlyLabel || label || 'Notion',
+  });
+  const status = err?.status && err.status >= 400 && err.status < 600 ? err.status : 502;
+  res.status(status >= 500 || status === 429 ? status : 502).json({
+    error: formatted.message,
+    title: formatted.title,
+    details: formatted.details,
+    code: formatted.code,
+    status: formatted.status,
+  });
+}
+
 r.get('/databases', async (_req, res) => {
+  // Backward-compatible alias — returns data sources (API 2025-09-03+)
   try {
     const client = getClientFromSettings();
     if (!client) return res.status(400).json({ error: 'Notion token not configured' });
-    const databases = await listDatabases(client);
-    res.json({ databases });
+    const databases = await listDataSources(client);
+    res.json({ databases, dataSources: databases });
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    sendNotionError(res, err);
+  }
+});
+
+r.get('/data-sources', async (_req, res) => {
+  try {
+    const client = getClientFromSettings();
+    if (!client) return res.status(400).json({ error: 'Notion token not configured' });
+    const dataSources = await listDataSources(client);
+    res.json({ dataSources, databases: dataSources });
+  } catch (err) {
+    sendNotionError(res, err);
+  }
+});
+
+r.post('/resolve', async (req, res) => {
+  try {
+    const client = getClientFromSettings();
+    if (!client) return res.status(400).json({ error: 'Notion token not configured' });
+    const input = req.body?.url || req.body?.id || req.body?.input || '';
+    const result = await resolveToDataSources(client, input);
+    res.json(result);
+  } catch (err) {
+    sendNotionError(res, err);
   }
 });
 
 r.get('/schema', async (req, res) => {
   try {
     const settings = loadSettings();
-    const databaseId = req.query.databaseId || settings.notion.databaseId;
-    if (!databaseId) return res.status(400).json({ error: 'databaseId required' });
+    const dataSourceId = req.query.dataSourceId || req.query.databaseId || settings.notion.dataSourceId || settings.notion.databaseId;
+    if (!dataSourceId) return res.status(400).json({ error: 'dataSourceId required' });
     const client = getClientFromSettings(settings);
     if (!client) return res.status(400).json({ error: 'Notion token not configured' });
-    const schema = await getDatabaseSchema(client, databaseId);
+    const schema = await getDataSourceSchema(client, dataSourceId);
     res.json(schema);
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    const settings = loadSettings();
+    const label = settings.notion?.databaseTitle || 'Notion';
+    // Try to use query id label later; fall back
+    sendNotionError(res, err, { label: req.query.label || label });
   }
 });
 
 r.post('/mapping', (req, res) => {
   const settings = loadSettings();
   const mapping = { ...settings.notion.mapping, ...(req.body?.mapping || {}) };
-  const databaseId = req.body?.databaseId || settings.notion.databaseId;
+  const dataSourceId = req.body?.dataSourceId || settings.notion.dataSourceId || '';
+  const databaseId = req.body?.databaseId || settings.notion.databaseId || '';
+  const databaseTitle = req.body?.databaseTitle ?? settings.notion.databaseTitle ?? '';
   const mappingConfirmed = req.body?.confirmed != null
     ? !!req.body.confirmed
     : (settings.notion.mappingConfirmed || false);
   const saved = saveSettings({
     ...settings,
-    notion: { ...settings.notion, mapping, databaseId, mappingConfirmed },
+    notion: {
+      ...settings.notion,
+      mapping,
+      dataSourceId,
+      databaseId,
+      databaseTitle,
+      mappingConfirmed,
+    },
   });
   res.json({
     mapping: saved.notion.mapping,
+    dataSourceId: saved.notion.dataSourceId,
     databaseId: saved.notion.databaseId,
     mappingConfirmed: saved.notion.mappingConfirmed,
   });
@@ -63,11 +122,11 @@ r.post('/mapping', (req, res) => {
 r.post('/import', async (req, res) => {
   try {
     const settings = loadSettings();
-    const databaseId = req.body?.databaseId || settings.notion.databaseId;
-    if (!databaseId) return res.status(400).json({ error: 'databaseId required' });
+    const dataSourceId = req.body?.dataSourceId || settings.notion.dataSourceId || settings.notion.databaseId;
+    if (!dataSourceId) return res.status(400).json({ error: 'dataSourceId required' });
     const client = getClientFromSettings(settings);
     if (!client) return res.status(400).json({ error: 'Notion token not configured' });
-    const rows = await fetchDatabaseRows(client, databaseId);
+    const rows = await fetchDataSourceRows(client, dataSourceId);
     const mapping = settings.notion.mapping;
     const ideas = rows.map((page) => pageToIdea(page, mapping));
 
@@ -131,7 +190,8 @@ r.post('/import', async (req, res) => {
 
     res.json({ count: ideas.length, ideas, created });
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    const settings = loadSettings();
+    sendNotionError(res, err, { label: settings.notion?.databaseTitle || 'Notion' });
   }
 });
 
@@ -167,7 +227,10 @@ r.post('/boards/:id/push', async (req, res) => {
       return res.status(409).json({ error: 'conflict', ...conflict, remote: remoteIdea });
     }
 
-    const schema = await getDatabaseSchema(client, settings.notion.databaseId || remote.parent?.database_id);
+    const dsId = settings.notion.dataSourceId
+      || remote.parent?.data_source_id
+      || settings.notion.databaseId;
+    const schema = await getDataSourceSchema(client, dsId);
     const properties = buildPropertyUpdates(localFields, settings.notion.mapping, schema.properties);
     const updated = await updatePage(client, pageId, properties);
     getDb().prepare(`
@@ -176,7 +239,7 @@ r.post('/boards/:id/push', async (req, res) => {
 
     res.json({ ok: true, notionLastEdited: updated.last_edited_time, conflict: conflict.conflict && force });
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    sendNotionError(res, err, { label: loadSettings().notion?.databaseTitle || 'Notion' });
   }
 });
 
@@ -235,7 +298,10 @@ r.post('/boards/:id/resolve', async (req, res) => {
           UPDATE boards SET title=?, status=?, updated_at=? WHERE id=?
         `).run(localFields.title, localFields.stage || bundle.board.status, nowIso(), req.params.id);
       }
-      const schema = await getDatabaseSchema(client, settings.notion.databaseId || remote.parent?.database_id);
+      const dsId = settings.notion.dataSourceId
+        || remote.parent?.data_source_id
+        || settings.notion.databaseId;
+      const schema = await getDataSourceSchema(client, dsId);
       const properties = buildPropertyUpdates(localFields, settings.notion.mapping, schema.properties);
       const updated = await updatePage(client, pageId, properties);
       db.prepare(`
@@ -246,7 +312,7 @@ r.post('/boards/:id/resolve', async (req, res) => {
 
     return res.status(400).json({ error: 'action must be keep_local, keep_notion, or edit' });
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    sendNotionError(res, err, { label: loadSettings().notion?.databaseTitle || 'Notion' });
   }
 });
 
@@ -278,9 +344,8 @@ r.get('/boards/:id/conflict', async (req, res) => {
     });
     res.json({ ...conflict, linked: true, local: localFields, remote: remoteIdea, localUpdatedAt: bundle.board.updatedAt, remoteStamp: remote.last_edited_time });
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    sendNotionError(res, err, { label: loadSettings().notion?.databaseTitle || 'Notion' });
   }
 });
-
 
 export default r;

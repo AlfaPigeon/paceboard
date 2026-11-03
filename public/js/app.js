@@ -14,6 +14,9 @@ const state = {
   media: [],
   pipeline: [],
   conflict: null,
+  notionError: null,
+  notionChoices: null,
+  notionSchema: null,
   selectedBeatId: null,
   zoom: 1,
   pan: { x: 0, y: 0 },
@@ -222,10 +225,20 @@ async function loadPipeline() {
   try {
     const data = await api('/api/notion/import', { method: 'POST', body: { createBoards: false } });
     state.pipeline = data.ideas || [];
-    $('#pipeline-count').textContent = state.pipeline.length || '';
-  } catch {
+    state.notionError = null;
+    const el = $('#pipeline-count');
+    if (el) el.textContent = state.pipeline.length || '';
+  } catch (err) {
     state.pipeline = [];
-    $('#pipeline-count').textContent = '';
+    const el = $('#pipeline-count');
+    if (el) el.textContent = '';
+    // Only surface inline when user is on the Notion screen / has a configured DS
+    if (state.settings?.notion?.dataSourceId || state.settings?.notion?.databaseId) {
+      setNotionError(err, {
+        label: state.settings?.notion?.databaseTitle || state.notionSchema?.title || 'Notion',
+        retry: 'schema',
+      });
+    }
   }
 }
 
@@ -886,6 +899,24 @@ function renderLibrary() {
 }
 
 /* ---------- Notion mapping ---------- */
+function notionErrorHtml() {
+  const err = state.notionError;
+  if (!err) return '';
+  const title = err.title || `Couldn't reach ${err.label || 'Notion'}`;
+  const details = err.details || err.message || '';
+  return `<div class="notion-error" id="notion-error-box" role="alert">
+    <h3>${escapeHtml(title)}</h3>
+    <p>${escapeHtml(err.message || 'The Notion API did not respond.')}</p>
+    <div class="btns">
+      <button class="btn btn-secondary" type="button" data-act="notion-retry">Retry</button>
+    </div>
+    <details>
+      <summary>API details</summary>
+      <pre>${escapeHtml(details)}</pre>
+    </details>
+  </div>`;
+}
+
 function renderNotion() {
   const s = state.settings || {};
   const notion = s.notion || {};
@@ -902,6 +933,11 @@ function renderNotion() {
   const propNames = Object.keys(state.notionSchema?.properties || {});
   const confirmed = !!notion.mappingConfirmed;
   const demo = state.demo || state.route.demoConflict;
+  const selectedId = notion.dataSourceId || notion.databaseId || '';
+  const selectedLabel = state.notionSchema?.label
+    || state.notionSchema?.title
+    || notion.databaseTitle
+    || selectedId;
 
   const mapRows = fields.map(([key, label]) => {
     const value = suggested[key] || mapping[key] || '';
@@ -938,6 +974,16 @@ function renderNotion() {
     remoteStamp: new Date().toISOString(),
   } : null));
 
+  const choices = state.notionChoices || [];
+  const choicesHtml = choices.length > 1 ? `
+    <div class="notion-ds-choices">
+      <p class="muted" style="font-size:12px">This database has several data sources — pick one:</p>
+      ${choices.map((c) => `
+        <button class="btn btn-secondary" type="button" data-act="pick-ds" data-ds="${escapeHtml(c.dataSourceId || c.id)}" data-db="${escapeHtml(c.databaseId || '')}" data-label="${escapeHtml(c.label || c.title || '')}">
+          ${escapeHtml(c.label || c.title || c.id)}
+        </button>`).join('')}
+    </div>` : '';
+
   const el = sheet();
   el.className = 'sheet';
   el.innerHTML = `
@@ -945,13 +991,13 @@ function renderNotion() {
       <div class="title-row">
         <div>
           <h1>Notion</h1>
-          <p class="sub">${demo ? 'Video pipeline detected. Mapping is pre-filled. Confirm once; stage and title sync both ways.' : (state.notionSchema ? escapeHtml(state.notionSchema.title) + ' detected. Mapping is pre-filled. Confirm once; stage and title sync both ways.' : 'Connect a database. Mapping opens pre-filled from detected fields — confirm only.')}</p>
+          <p class="sub">${demo ? 'Video pipeline detected. Mapping is pre-filled. Confirm once; stage and title sync both ways.' : (state.notionSchema ? escapeHtml(state.notionSchema.label || state.notionSchema.title) + ' detected. Mapping is pre-filled. Confirm once; stage and title sync both ways.' : 'Connect a data source. Mapping opens pre-filled from detected fields — confirm only.')}</p>
         </div>
         ${demo ? '<span class="pill">Demo layout</span>' : ''}
       </div>
       <div class="cols">
         <div class="col">
-          <div><h2>Connection</h2><p class="desc">${demo ? '47 cards in Video pipeline.' : (state.pipeline.length ? state.pipeline.length + ' cards in pipeline.' : 'Token + database required.')}</p></div>
+          <div><h2>Connection</h2><p class="desc">${demo ? '47 cards in Video pipeline.' : (state.pipeline.length ? state.pipeline.length + ' cards in pipeline.' : 'Token + data source required.')}</p></div>
           <div class="panel">
             <div class="status-line">
               <span class="${(notion.tokenSet || demo) ? 'dot-live' : 'dot-off'}"></span>
@@ -959,30 +1005,41 @@ function renderNotion() {
             </div>
             ${demo ? `
             <div class="field"><label>Workspace</label><div class="map-field">Demo workspace</div></div>
-            <div class="field"><label>Database</label><div class="map-field"><span>Video pipeline</span><span class="chip-pre">Matched</span></div></div>
+            <div class="field"><label>Data source</label><div class="map-field"><span>Video pipeline</span><span class="chip-pre">Matched</span></div></div>
             ` : `
             <div class="field">
               <label>Integration token</label>
               <input class="input" id="notion-token" type="password" placeholder="${notion.tokenSet ? 'Token set — paste to replace' : 'secret_…'}" />
             </div>
             <div class="field">
-              <label>Database</label>
+              <label>Data source</label>
               <div style="display:flex;gap:8px">
-                <select class="input" id="notion-db"><option value="">${notion.databaseId ? escapeHtml(notion.databaseId) : 'Select…'}</option></select>
-                <button class="btn btn-secondary" data-act="load-dbs">Refresh</button>
+                <select class="input" id="notion-ds">
+                  <option value="">${selectedLabel ? escapeHtml(selectedLabel) : 'Select…'}</option>
+                </select>
+                <button class="btn btn-secondary" data-act="load-dbs" type="button">Refresh</button>
               </div>
             </div>
+            <div class="field">
+              <label>Or paste database URL</label>
+              <div style="display:flex;gap:8px">
+                <input class="input" id="notion-url" type="text" placeholder="https://www.notion.so/… or collection://…" />
+                <button class="btn btn-secondary" data-act="resolve-url" type="button">Use</button>
+              </div>
+              ${choicesHtml}
+            </div>
             <div class="actions" style="justify-content:flex-start;margin-top:8px">
-              <button class="btn btn-primary" data-act="save-token">Save connection</button>
-            </div>`}
+              <button class="btn btn-primary" data-act="save-token" type="button">Save connection</button>
+            </div>
+            ${notionErrorHtml()}`}
           </div>
           <div><h2>Field mapping</h2><p class="desc">Defaults for stage, persona, leave-behind, link, target week. Confirm or change if renamed.</p></div>
           <div class="panel">
             ${mapRows}
             <p class="muted" style="font-size:12px;margin-top:8px">Stage values: Publish, Draft, unstaged. Title + stage sync both ways.</p>
             <div class="actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-              <button class="btn btn-ghost" data-act="reload-schema">Change mapping</button>
-              <button class="btn btn-primary" data-act="confirm-mapping">Confirm mapping</button>
+              <button class="btn btn-ghost" data-act="reload-schema" type="button">Change mapping</button>
+              <button class="btn btn-primary" data-act="confirm-mapping" type="button">Confirm mapping</button>
             </div>
           </div>
         </div>
@@ -1007,9 +1064,9 @@ function renderNotion() {
                 <div class="box"><strong>Notion</strong>${escapeHtml(conflictHtml.diffs?.[0]?.remote || conflictHtml.remote?.title || '')}</div>
               </div>
               <div class="btns">
-                <button class="btn btn-secondary" data-act="keep-local">Keep local</button>
-                <button class="btn btn-secondary" data-act="keep-notion">Keep Notion</button>
-                <button class="btn btn-ghost" data-act="edit-conflict">Edit…</button>
+                <button class="btn btn-secondary" data-act="keep-local" type="button">Keep local</button>
+                <button class="btn btn-secondary" data-act="keep-notion" type="button">Keep Notion</button>
+                <button class="btn btn-ghost" data-act="edit-conflict" type="button">Edit…</button>
               </div>
             </div>` : `<p class="muted" style="font-size:13px">No open conflicts.</p>`}
         </div>
@@ -1019,10 +1076,39 @@ function renderNotion() {
   bindNotion();
 }
 
+function setNotionError(err, { label, retry } = {}) {
+  if (!err) {
+    state.notionError = null;
+    return;
+  }
+  const data = err.data || {};
+  const dbLabel = label
+    || state.notionSchema?.databaseTitle
+    || state.notionSchema?.title
+    || state.settings?.notion?.databaseTitle
+    || 'Notion';
+  state.notionError = {
+    title: data.title || `Couldn't reach ${dbLabel}`,
+    message: data.error || err.message || 'The Notion API did not respond.',
+    details: data.details || data.error || err.message || String(err),
+    label: dbLabel,
+    retry: retry || 'refresh',
+  };
+}
+
 function bindNotion() {
   $$('[data-act="load-dbs"]').forEach((b) => b.addEventListener('click', loadDatabases));
   $$('[data-act="save-token"]').forEach((b) => b.addEventListener('click', saveNotionConnection));
   $$('[data-act="confirm-mapping"]').forEach((b) => b.addEventListener('click', confirmMapping));
+  $$('[data-act="resolve-url"]').forEach((b) => b.addEventListener('click', resolveNotionUrl));
+  $$('[data-act="notion-retry"]').forEach((b) => b.addEventListener('click', retryNotionAction));
+  $$('[data-act="pick-ds"]').forEach((b) => b.addEventListener('click', () => {
+    pickDataSource({
+      dataSourceId: b.dataset.ds,
+      databaseId: b.dataset.db,
+      label: b.dataset.label,
+    });
+  }));
   $$('[data-act="reload-schema"]').forEach((b) => b.addEventListener('click', async () => {
     await loadNotionSchema();
     renderNotion();
@@ -1032,49 +1118,146 @@ function bindNotion() {
   $$('[data-act="edit-conflict"]').forEach((b) => b.addEventListener('click', editConflict));
 }
 
+async function retryNotionAction() {
+  const kind = state.notionError?.retry || 'refresh';
+  state.notionError = null;
+  if (kind === 'resolve') return resolveNotionUrl();
+  if (kind === 'schema') {
+    await loadNotionSchema();
+    renderNotion();
+    return;
+  }
+  await loadDatabases();
+}
+
 async function loadDatabases() {
   try {
-    const data = await api('/api/notion/databases');
-    const sel = $('#notion-db');
+    state.notionError = null;
+    const data = await api('/api/notion/data-sources');
+    const list = data.dataSources || data.databases || [];
+    const sel = $('#notion-ds');
     if (!sel) return;
-    sel.innerHTML = (data.databases || []).map((d) =>
-      `<option value="${escapeHtml(d.id)}" ${d.id === state.settings?.notion?.databaseId ? 'selected' : ''}>${escapeHtml(d.title)}</option>`
-    ).join('') || '<option value="">No databases</option>';
+    const selected = state.settings?.notion?.dataSourceId || state.settings?.notion?.databaseId || '';
+    sel.innerHTML = list.length
+      ? list.map((d) => {
+          const id = d.dataSourceId || d.id;
+          const label = d.label || d.title || id;
+          return `<option value="${escapeHtml(id)}" data-db="${escapeHtml(d.databaseId || '')}" data-label="${escapeHtml(label)}" ${id === selected ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+        }).join('')
+      : '<option value="">No data sources</option>';
   } catch (err) {
-    alert(err.message || 'Could not list databases');
+    setNotionError(err, { retry: 'refresh' });
+    renderNotion();
   }
 }
 
-async function saveNotionConnection() {
-  const token = $('#notion-token')?.value?.trim();
-  const databaseId = $('#notion-db')?.value || state.settings?.notion?.databaseId;
-  const body = { notion: {} };
-  if (token) body.notion.token = token;
-  if (databaseId) body.notion.databaseId = databaseId;
+async function resolveNotionUrl() {
+  const input = $('#notion-url')?.value?.trim();
+  if (!input) return;
+  try {
+    state.notionError = null;
+    state.notionChoices = null;
+    const result = await api('/api/notion/resolve', { method: 'POST', body: { url: input } });
+    if (result.status === 'ok' && result.selected) {
+      await pickDataSource(result.selected);
+      return;
+    }
+    if (result.status === 'choose' && result.choices?.length) {
+      state.notionChoices = result.choices;
+      renderNotion();
+      return;
+    }
+    setNotionError({
+      message: result.error || 'Could not resolve that URL',
+      data: result.details || { error: result.error, title: `Couldn't reach Notion`, details: result.error },
+    }, { retry: 'resolve' });
+    renderNotion();
+  } catch (err) {
+    setNotionError(err, { retry: 'resolve' });
+    renderNotion();
+  }
+}
+
+async function pickDataSource(choice) {
+  const dataSourceId = choice.dataSourceId || choice.id;
+  const databaseId = choice.databaseId || '';
+  const label = choice.label || choice.title || choice.databaseTitle || '';
+  const body = {
+    notion: {
+      dataSourceId,
+      databaseId,
+      databaseTitle: choice.databaseTitle || label,
+    },
+  };
   state.settings = await api('/api/settings', { method: 'PUT', body });
-  if (databaseId) await loadNotionSchema(databaseId);
+  state.notionChoices = null;
+  state.notionError = null;
+  await loadNotionSchema(dataSourceId);
   await loadPipeline();
   renderNotion();
 }
 
-async function loadNotionSchema(databaseId) {
+async function saveNotionConnection() {
+  const token = $('#notion-token')?.value?.trim();
+  const sel = $('#notion-ds');
+  const dataSourceId = sel?.value || state.settings?.notion?.dataSourceId;
+  const opt = sel?.selectedOptions?.[0];
+  const databaseId = opt?.dataset?.db || state.settings?.notion?.databaseId || '';
+  const label = opt?.dataset?.label || state.settings?.notion?.databaseTitle || '';
+  const body = { notion: {} };
+  if (token) body.notion.token = token;
+  if (dataSourceId) {
+    body.notion.dataSourceId = dataSourceId;
+    body.notion.databaseId = databaseId;
+    if (label) body.notion.databaseTitle = label;
+  }
   try {
-    const q = databaseId || state.settings?.notion?.databaseId;
+    state.notionError = null;
+    state.settings = await api('/api/settings', { method: 'PUT', body });
+    if (dataSourceId) await loadNotionSchema(dataSourceId);
+    await loadPipeline();
+    renderNotion();
+  } catch (err) {
+    setNotionError(err, { retry: 'schema' });
+    renderNotion();
+  }
+}
+
+async function loadNotionSchema(dataSourceId) {
+  try {
+    const q = dataSourceId || state.settings?.notion?.dataSourceId || state.settings?.notion?.databaseId;
     if (!q) return;
-    state.notionSchema = await api(`/api/notion/schema?databaseId=${encodeURIComponent(q)}`);
-  } catch {
+    state.notionError = null;
+    state.notionSchema = await api(`/api/notion/schema?dataSourceId=${encodeURIComponent(q)}`);
+  } catch (err) {
     state.notionSchema = null;
+    setNotionError(err, {
+      label: state.settings?.notion?.databaseTitle || 'Notion',
+      retry: 'schema',
+    });
   }
 }
 
 async function confirmMapping() {
   const mapping = { ...(state.settings?.notion?.mapping || {}) };
   $$('[data-map]').forEach((sel) => { mapping[sel.dataset.map] = sel.value; });
-  const databaseId = $('#notion-db')?.value || state.settings?.notion?.databaseId;
-  await api('/api/notion/mapping', { method: 'POST', body: { mapping, databaseId, confirmed: true } });
-  state.settings = await loadSettings();
-  alert('Mapping confirmed. Stage and title will sync both ways.');
-  renderNotion();
+  const sel = $('#notion-ds');
+  const dataSourceId = sel?.value || state.settings?.notion?.dataSourceId;
+  const opt = sel?.selectedOptions?.[0];
+  const databaseId = opt?.dataset?.db || state.settings?.notion?.databaseId || '';
+  const databaseTitle = opt?.dataset?.label || state.settings?.notion?.databaseTitle || state.notionSchema?.databaseTitle || '';
+  try {
+    await api('/api/notion/mapping', {
+      method: 'POST',
+      body: { mapping, dataSourceId, databaseId, databaseTitle, confirmed: true },
+    });
+    state.settings = await loadSettings();
+    state.notionError = null;
+    renderNotion();
+  } catch (err) {
+    setNotionError(err, { retry: 'schema' });
+    renderNotion();
+  }
 }
 
 async function resolveConflict(action) {
@@ -1089,10 +1272,12 @@ async function resolveConflict(action) {
   try {
     await api(`/api/notion/boards/${boardId}/resolve`, { method: 'POST', body: { action } });
     state.conflict = null;
+    state.notionError = null;
     await loadBoards();
     renderNotion();
   } catch (err) {
-    alert(err.message || 'Resolve failed');
+    setNotionError(err, { retry: 'schema' });
+    renderNotion();
   }
 }
 
@@ -1111,9 +1296,14 @@ function editConflict() {
     body: { action: 'edit', title: next },
   }).then(() => {
     state.conflict = null;
+    state.notionError = null;
     return loadBoards();
-  }).then(() => renderNotion()).catch((err) => alert(err.message));
+  }).then(() => renderNotion()).catch((err) => {
+    setNotionError(err, { retry: 'schema' });
+    renderNotion();
+  });
 }
+
 
 /* ---------- Settings ---------- */
 function renderSettings() {
